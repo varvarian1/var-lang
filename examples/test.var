@@ -1,0 +1,18 @@
+func main() as int {
+    let x: int = 10;
+
+    if (x < 11) {
+        echo("x < 11");
+    }
+    else {
+        echo("11");
+    }
+
+    for (let i: int = 0; i < 11; i = i + 1) {
+        echo("some text");
+    }
+
+    echo("end");
+
+    return 0;
+}
