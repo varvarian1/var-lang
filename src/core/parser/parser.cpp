@@ -49,6 +49,26 @@ std::unique_ptr<ast::Stmt> Parser::declaration() {
     else if (check(Token::Type::LeftBrace)) {
         return block();
     }
+    else if (check(Token::Type::Identifier)) {
+        std::string name = currentToken.text;
+        size_t savedPosition = tokenIndex;
+        Token savedToken = currentToken;
+
+        nextToken();
+
+        if (check(Token::Type::LeftParenthesis)) {
+            tokenIndex = savedPosition;
+            currentToken = savedToken;
+
+            return functionCallStmt();
+        }
+        else {
+            tokenIndex = savedPosition;
+            currentToken = savedToken;
+
+            throw std::runtime_error("Invalid declaration! Current token: " + currentToken.text);
+        }
+    }
     
     throw std::runtime_error("Invalid declaration! Current token: " + currentToken.text);
 }
@@ -260,8 +280,9 @@ std::unique_ptr<ast::Expr> Parser::factor() {
             eat(Token::Type::RightParenthesis);
             return std::make_unique<ast::FunctionCall>(name, std::move(args));
         }
-        
-        return std::make_unique<ast::Identifier>(name);
+        else {
+            return std::make_unique<ast::Identifier>(name);
+        }
     }
 
     else if (currentToken.type == Token::Type::LeftParenthesis)
@@ -293,6 +314,21 @@ std::unique_ptr<ast::Expr> Parser::parseParenthesizedExpr() {
     return expr; 
 }
 
+std::unique_ptr<ast::Expr> Parser::parseFunctionCall(const std::string& name) {
+    eat(Token::Type::LeftParenthesis);
+
+    std::vector<std::unique_ptr<ast::Expr>> arguments;
+    if (!check(Token::Type::RightParenthesis)) {
+        do {
+            arguments.push_back(expression());
+        } while (match({Token::Type::Comma}));
+    }
+
+    eat(Token::Type::RightParenthesis);
+
+    return std::make_unique<ast::FunctionCall>(name, std::move(arguments));
+}
+
 std::unique_ptr<ast::Stmt> Parser::assignStmt() {
     std::string variableName = currentToken.text;
     eat(Token::Type::Identifier);
@@ -305,17 +341,69 @@ std::unique_ptr<ast::Stmt> Parser::assignStmt() {
 }
 
 std::unique_ptr<ast::Stmt> Parser::statement() {
-    if (match({Token::Keyword::ECHO})) {
+    std::cout << "Statement: current token = " << currentToken.text << std::endl;
+    
+    if (match({Token::Keyword::LET})) {
+        std::cout << "Match LET" << std::endl;
+        return letDeclaration();
+    }
+    else if (match({Token::Keyword::ECHO})) {
+        std::cout << "Matched ECHO" << std::endl;
         return echoStmt();
     }
     else if (match({Token::Keyword::RETURN})) {
+        std::cout << "Matched RETURN" << std::endl;
         return returnStmt();
     }
     else if (check(Token::Type::Identifier)) {
-        return assignStmt();
+        std::cout << "Found identifier: " << currentToken.text << std::endl;
+        
+        size_t savedPosition = tokenIndex;
+        Token savedToken = currentToken;
+        
+        std::string name = currentToken.text;
+        nextToken();
+        std::cout << "Next token: " << currentToken.text << std::endl;
+        
+        if (check(Token::Type::LeftParenthesis)) {
+            std::cout << "Found '(', treating as function call" << std::endl;
+            tokenIndex = savedPosition;
+            currentToken = savedToken;
+            
+            return functionCallStmt();
+        }
+        else {
+            std::cout << "Not a function call, restoring" << std::endl;
+            tokenIndex = savedPosition;
+            currentToken = savedToken;
+            
+            return assignStmt();
+        }
     }
     
+    std::cout << "No match found for: " << currentToken.text << std::endl;
     throw std::runtime_error("Invalid statement");
+}
+
+std::unique_ptr<ast::Stmt> Parser::functionCallStmt() {
+    std::string name = currentToken.text;
+    eat(Token::Type::Identifier);
+    
+    eat(Token::Type::LeftParenthesis);
+    
+    std::vector<std::unique_ptr<ast::Expr>> arguments;
+    
+    if (!check(Token::Type::RightParenthesis)) {
+        do {
+            arguments.push_back(expression());
+        } while (match({Token::Type::Comma}));
+    }
+    
+    eat(Token::Type::RightParenthesis);
+    eat(Token::Type::Semicolon);
+    
+    auto functionCall = std::make_unique<ast::FunctionCall>(name, std::move(arguments));
+    return std::make_unique<ast::ExpressionStmt>(std::move(functionCall));
 }
 
 std::unique_ptr<ast::Stmt> Parser::ifStmt() {

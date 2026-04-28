@@ -1,4 +1,11 @@
+func myFunc() as int {
+    echo("Some text");
+    return 0;
+}
+
 func main() as int {
     let message: str = "Hello, VAR!";
     echo(message);
+
+    myFunc();
 }

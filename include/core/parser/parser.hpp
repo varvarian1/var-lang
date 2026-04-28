@@ -40,9 +40,11 @@ public:
     std::unique_ptr<ast::Expr> parseNumber();
     std::unique_ptr<ast::Expr> parseString();
     std::unique_ptr<ast::Expr> parseParenthesizedExpr();
+    std::unique_ptr<ast::Expr> parseFunctionCall(const std::string& name);
 
     /* statment parsing methods */
     std::unique_ptr<ast::Stmt> statement();
+    std::unique_ptr<ast::Stmt> functionCallStmt();
     std::unique_ptr<ast::Stmt> ifStmt();
     std::unique_ptr<ast::Stmt> forStmt();
     std::unique_ptr<ast::Stmt> returnStmt();
