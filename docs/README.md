@@ -16,6 +16,20 @@ cmake ..
 cmake --build .
 ```
 
+### Install
+
+```bash
+cd build
+sudo make install
+```
+
+### Uninstall
+
+```bash
+cd scripts
+./uninstall.sh
+```
+
 ### Usage
 You can run test programs in examples
 ```bash
