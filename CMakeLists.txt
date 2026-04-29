@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(BUILD_SHARED_LIBS YES)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/output)
 
+include(GNUInstallDirs) # Provides paths: bin/, lib/, share/
+
 add_library(core STATIC
     src/core/lexer/lexer.cpp
     src/core/parser/parser.cpp
@@ -34,3 +36,45 @@ if(WIN32)
 elseif(UNIX)
     message(STATUS "Running on Linux")
 endif()
+
+# Installation (make install)
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+if (EXISTS ${CMAKE_SOURCE_DIR}/examples)
+    install(DIRECTORY examples/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/examples
+        PATTERN "*.var" # Install only .var files
+    )
+endif()
+
+if (EXISTS ${CMAKE_SOURCE_DIR}/README.md)
+    install(FILES README.md
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/${PROJECT_NAME}
+    )
+endif()
+
+if (EXISTS ${CMAKE_SOURCE_DIR}/LICENSE)
+    install(FILES LICENSE
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/${PROJECT_NAME}
+    )
+endif()
+
+# Install libraries (for VAR development)
+install(TARGETS core utils
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+message(STATUS "Installation prefix: ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "Binary directory: ${CMAKE_INSTALL_BINDIR}")
+message(STATUS "Include directory: ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}")
+message(STATUS "")
+message(STATUS "To install: cd build && sudo make install")
+message(STATUS "To uninstall: sudo rm -f ${CMAKE_INSTALL_BINDIR}/${PROJECT_NAME}")
