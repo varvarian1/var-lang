@@ -1,3 +1,5 @@
+#include <ctime>
+
 #include "logger/logger.hpp"
 
 namespace logger {
