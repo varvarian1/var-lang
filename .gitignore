@@ -1,5 +1,9 @@
 .vscode
+
 build
+build-win
+build-linux
+
 output
 log
 
