@@ -10,7 +10,10 @@
 
 int main(int argc, char *argv[]) {
 
-    logger::Logger logger("../log/app.log", logger::WRITE);
+    std::filesystem::path dir = "log";
+    std::filesystem::create_directories(dir);
+
+    logger::Logger logger("log/app.log", logger::WRITE);
 
     logger.log(logger::INFO, "Program started");
 
@@ -39,7 +42,7 @@ int main(int argc, char *argv[]) {
 
     /* lexer */
     logger.log(logger::INFO, "Starting lexical analysis");
-    logger::Logger lexerLog("../log/lexer.log", logger::REWRITE);
+    logger::Logger lexerLog("log/lexer.log", logger::REWRITE);
 
     lexer::Lexer lexer;
     auto program = lexer.tokenize(input);

@@ -2,13 +2,13 @@
 
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
 
 namespace logger {
 
-// Define the severity level of log messages
 enum LogLevel {
     INFO,    // General information messages
     ERROR,   // Error conditions
@@ -30,15 +30,14 @@ class Logger {
 public:
     Logger(const std::string& filename, Mode mode) {
         if (mode == WRITE)
-            logFile.open(filename, std::ios::app); // Open in append mode
+            logFile.open(filename, std::ios::app);
         else if (mode == REWRITE)
-            logFile.open(filename, std::ios::out); // Open in write mode (overwrite)
+            logFile.open(filename, std::ios::out);
         
         if (!logFile.is_open())
             std::cerr << "Error: can't open file." << std::endl;
     }
 
-    // Write a log message with specified severity level
     void log(LogLevel level, const std::string& message);
 
     // Get current system time as formatted string
@@ -52,13 +51,12 @@ public:
 
 	void parserLog();
 
-    // Destroy the Logger object and close the log file
     ~Logger() {
-        logFile.close(); // Ensure file is properly closed
+        logFile.close();
     }
 
 private:
-    std::ofstream logFile; // File stream for logging output
+    std::ofstream logFile;
 
 };
 
