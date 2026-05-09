@@ -6,5 +6,4 @@ build-linux
 
 output
 log
-
-LANGUAGE_REFERENCE.md
+.cache

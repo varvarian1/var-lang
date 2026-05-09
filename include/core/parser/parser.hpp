@@ -3,10 +3,25 @@
 #include <iostream>
 #include <memory>
 
+#include "result.hpp"
 #include "lexer/lexer.hpp"
 #include "ast/ast.hpp"
 
 namespace parser {
+
+struct ErrorMeta {
+    std::string message;
+    Token token;
+};
+
+template<typename T>
+using ParseResult = Result<T, ErrorMeta>;
+
+template <typename T, typename... Args>
+Result<std::unique_ptr<T>, ErrorMeta> make_ok(Args&&... args) {
+    return std::make_unique<T>(std::forward<Args>(args)...);
+}
+
 class Parser {
 public:
     Parser(ParsedProgram& program) : program(program), tokensVector(program.tokens), tokenIndex(0) {
@@ -15,21 +30,21 @@ public:
         }
     }
 
-    std::vector<std::unique_ptr<ast::Stmt>> parse();
+    std::vector<ast::Statement> parse();
 
     /* declarations */
-    std::unique_ptr<ast::Stmt> declaration();
-    std::unique_ptr<ast::Stmt> letDeclaration();
-    std::unique_ptr<ast::Stmt> functionDeclaration();
-    std::unique_ptr<ast::Stmt> variableDeclaration();
-    std::unique_ptr<ast::Stmt> block();
-    std::string parseType();
+    ParseResult<ast::Statement> declaration();
+    ParseResult<ast::Statement> letDeclaration();
+    ParseResult<ast::Statement> functionDeclaration();
+    ParseResult<ast::Statement> variableDeclaration();
+    ParseResult<ast::Statement> block();
+    ParseResult<std::string> parseType();
 
     /* expression parsing methods */
-    std::unique_ptr<ast::Expr> expression();
-    std::unique_ptr<ast::Expr> term();
-    std::unique_ptr<ast::Expr> factor();
-    std::unique_ptr<ast::Expr> comparison();
+    ParseResult<ast::Expression> expression();
+    ParseResult<ast::Expression> term();
+    ParseResult<ast::Expression> factor();
+    ParseResult<ast::Expression> comparison();
 
     /* token type checking helpers */
     bool isPlus(const Token& token) const;
@@ -37,32 +52,32 @@ public:
     bool isComparison(const Token& token) const;
 
     /* helper methods for factor parsing */
-    std::unique_ptr<ast::Expr> parseNumber();
-    std::unique_ptr<ast::Expr> parseString();
-    std::unique_ptr<ast::Expr> parseParenthesizedExpr();
-    std::unique_ptr<ast::Expr> parseFunctionCall(const std::string& name);
+    ParseResult<ast::Expression> parseNumber();
+    ParseResult<ast::Expression> parseString();
+    ParseResult<ast::Expression> parseParenthesizedExpr();
+    ParseResult<ast::Expression> parseFunctionCall(const std::string& name);
 
     /* statment parsing methods */
-    std::unique_ptr<ast::Stmt> statement();
-    std::unique_ptr<ast::Stmt> functionCallStmt();
-    std::unique_ptr<ast::Stmt> ifStmt();
-    std::unique_ptr<ast::Stmt> forStmt();
-    std::unique_ptr<ast::Stmt> returnStmt();
-    std::unique_ptr<ast::Stmt> echoStmt();
-    std::unique_ptr<ast::Stmt> assignStmt();
+    ParseResult<ast::Statement> statement();
+    ParseResult<ast::Statement> functionCallStmt();
+    ParseResult<ast::Statement> ifStmt();
+    ParseResult<ast::Statement> forStmt();
+    ParseResult<ast::Statement> returnStmt();
+    ParseResult<ast::Statement> echoStmt();
+    ParseResult<ast::Statement> assignStmt();
 
     bool check(Token::Type type) const;
-    Token nextToken();
-    Token peekNext() const;
+    std::optional<Token> skipUntil(Token::Type type);
+    std::optional<Token> nextToken();
+    std::optional<Token> peekNext() const;
 
     template<typename T>
-    Token eat(T type) {
+    ParseResult<Token> eat(T type) {
         if constexpr (std::is_same_v<T, Token::Type>) {
             if (currentToken.type != type) {
-                std::cerr << "Expected token type: " << static_cast<int>(type) 
-                        << ", got: " << static_cast<int>(currentToken.type) 
-                        << " text: " << currentToken.text << std::endl;
-                throw std::runtime_error("Unexpected token type!");
+                return ErrorMeta{"Expected token type: " + token_type_to_string(type) 
+                                    + ", got: " + token_type_to_string(currentToken.type)
+                                    + " text: " + currentToken.text, currentToken};
             }
 
             Token consumed = currentToken;
@@ -70,21 +85,15 @@ public:
 
             return consumed;
         }
-        else if constexpr (std::is_same_v<T, Token::Keyword>) {
-            std::cout << "eat(Keyword): expecting keyword: " << static_cast<int>(type) << std::endl;
-            std::cout << "Current token: '" << currentToken.text << "', type: " << static_cast<int>(currentToken.type) << std::endl;
-            
+        else if constexpr (std::is_same_v<T, Keyword>) {            
             eat(Token::Type::Keyword);
             
             auto& [_, k_meta] = program;
-            Token::Keyword* keyword = k_meta.get(tokenIndex - 1);
-            
-            std::cout << "Found keyword: " << (keyword ? std::to_string(static_cast<int>(*keyword)) : "null") << std::endl;
+            Keyword* keyword = k_meta.get(tokenIndex - 1);
             
             if (!keyword || *keyword != type) {
-                std::cerr << "Expected keyword: " << static_cast<int>(type) 
-                        << ", got: " << (keyword ? std::to_string(static_cast<int>(*keyword)) : "null") << std::endl;
-                throw std::runtime_error("Unexpected keyword!");
+                return ErrorMeta{"Expected keyword: " + keyword_to_string(type)
+                                    + ", got: " + (keyword ? keyword_to_string(*keyword) : "null"), currentToken};
             }
             
             Token consumed = currentToken;
@@ -93,7 +102,7 @@ public:
             return consumed;
         }
         
-        throw std::runtime_error("Invalid type for eat()");
+        return ErrorMeta{"Unsupported type for eat()", currentToken};
     }
 
     template<typename T>
@@ -103,9 +112,9 @@ public:
         if constexpr (std::is_same_v<T, Token::Type>) {
             currentType = currentToken.type;
         }
-        else if constexpr (std::is_same_v<T, Token::Keyword>) {
+        else if constexpr (std::is_same_v<T, Keyword>) {
             auto& [ _, k_meta ] = program;
-            Token::Keyword* keyword = k_meta.get(tokenIndex);
+            Keyword* keyword = k_meta.get(tokenIndex);
 
             if (!keyword)
                 return false;
@@ -131,7 +140,6 @@ private:
     // Current parsing position
     size_t tokenIndex = 0;
     Token currentToken;
-
 };
 
 } // namespace parser

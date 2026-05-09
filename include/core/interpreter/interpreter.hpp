@@ -17,7 +17,7 @@ public:
         delete globalEnv;
     }
 
-    void interpret(const std::vector<std::unique_ptr<ast::Stmt>>& statements);
+    void interpret(const std::vector<ast::Statement>& statements);
     Value getResult() const;
 
     void evaluate(ast::Expr& expr);

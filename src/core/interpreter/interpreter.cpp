@@ -3,7 +3,7 @@
 
 namespace interpreter {
 
-void Interpreter::interpret(const std::vector<std::unique_ptr<ast::Stmt>>& statements) {
+void Interpreter::interpret(const std::vector<ast::Statement>& statements) {
     try {
         for (const auto& stmt : statements) {
             stmt->accept(*this);
@@ -293,7 +293,7 @@ void Interpreter::visit(ast::FunctionStmt& stmt) {
     Function func;
     func.name = stmt.name;
     func.params = stmt.params;
-    func.body = std::move(const_cast<std::unique_ptr<ast::Stmt>&>(stmt.body));
+    func.body = std::move(const_cast<ast::Statement&>(stmt.body));
     func.returnType = stmt.returnType;
     
     currentEnv->defineFunction(stmt.name, std::move(func));

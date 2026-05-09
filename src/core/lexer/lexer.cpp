@@ -3,7 +3,7 @@
 #include "lexer/lexer.hpp"
 
 namespace lexer {
-ParsedProgram Lexer::tokenize(std::string& input) {
+ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
     ParsedProgram program;
 	auto& [ tokens, k_meta ] = program; // tokens vector + keyword metadata
 	
@@ -18,6 +18,7 @@ ParsedProgram Lexer::tokenize(std::string& input) {
 	State currentState = State::InNewToken;
 	std::string lexem;
 	Token currentToken;
+    Token::Position position{ file, 1, 1 };
     bool decimalPoint = false;
 
 	auto currentChar = input.begin();
@@ -26,8 +27,12 @@ ParsedProgram Lexer::tokenize(std::string& input) {
 			case State::InNewToken:
 				lexem.clear();
                 decimalPoint = false;
-				
+
                 if (isWhitespace(*currentChar)) {
+                    if (*currentChar == '\n') {
+                        position.line++;
+                        position.column = 1;
+                    }
 		            ++currentChar;
                     continue;
                 }
@@ -50,13 +55,13 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                     if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
                         lexem = "==";
                         currentChar += 2;
-                        currentToken = {Token::Type::Equal, lexem};
+                        currentToken = {Token::Type::Equal, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                     else {
                         lexem = '=';
                         ++currentChar;
-                        currentToken = {Token::Type::Equal, lexem};
+                        currentToken = {Token::Type::Equal, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                 }
@@ -64,7 +69,7 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                     if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
                         lexem = "!=";
                         currentChar += 2;
-                        currentToken = {Token::Type::NotEqual, lexem};
+                        currentToken = {Token::Type::NotEqual, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                 }
@@ -72,13 +77,13 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                     if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
                         lexem = "<=";
                         currentChar += 2;
-                        currentToken = {Token::Type::LessEqual, lexem};
+                        currentToken = {Token::Type::LessEqual, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                     else {
                         lexem = '<';
                         ++currentChar;
-                        currentToken = {Token::Type::Less, lexem};
+                        currentToken = {Token::Type::Less, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                 }
@@ -86,13 +91,13 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                     if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
                         lexem = ">=";
                         currentChar += 2;
-                        currentToken = {Token::Type::GreaterEqual, lexem};
+                        currentToken = {Token::Type::GreaterEqual, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                     else {
                         lexem = '>';
                         ++currentChar;
-                        currentToken = {Token::Type::Greater, lexem};
+                        currentToken = {Token::Type::Greater, lexem, position};
                         currentState = State::InCompleteToken;
                     }
                 }
@@ -100,19 +105,19 @@ ParsedProgram Lexer::tokenize(std::string& input) {
 					if (currentChar + 1 != input.end() && *(currentChar + 1) == '+') {
 						lexem = "++";
 						currentChar += 2;
-						currentToken = {Token::Type::Increment, lexem};
+						currentToken = {Token::Type::Increment, lexem, position};
 						currentState = State::InCompleteToken;
 					}
                     else if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
                         lexem = "+=";
                         currentChar += 2;
-                        currentToken = {Token::Type::PlusEqual, lexem};
+                        currentToken = {Token::Type::PlusEqual, lexem, position};
                         currentState = State::InCompleteToken;
                     }
 					else {
 						lexem = '+';
 						++currentChar;
-						currentToken = {Token::Type::Plus, lexem};
+						currentToken = {Token::Type::Plus, lexem, position};
 						currentState = State::InCompleteToken;
 					}
                 }
@@ -120,74 +125,74 @@ ParsedProgram Lexer::tokenize(std::string& input) {
 					if (currentChar + 1 != input.end() && *(currentChar + 1) == '-') {
 						lexem = "--";
 						currentChar += 2;
-						currentToken = {Token::Type::Decrement, lexem};
+						currentToken = {Token::Type::Decrement, lexem, position};
 						currentState = State::InCompleteToken;	
 					}
                     else if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
                         lexem = "-=";
                         currentChar += 2;
-                        currentToken = {Token::Type::MinusEqual, lexem};
+                        currentToken = {Token::Type::MinusEqual, lexem, position};
                         currentState = State::InCompleteToken;
                     }
 					else {
 						lexem = '-';
 						++currentChar;
-						currentToken = {Token::Type::Minus, lexem};
+						currentToken = {Token::Type::Minus, lexem, position};
 						currentState = State::InCompleteToken;
 					}
                 }
                 else if (*currentChar == '*') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = {Token::Type::Mult, lexem};
+                    currentToken = {Token::Type::Mult, lexem, position};
                     currentState = State::InCompleteToken;
                 }
                 else if (*currentChar == '/') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = {Token::Type::Div, lexem};
+                    currentToken = {Token::Type::Div, lexem, position};
                     currentState = State::InCompleteToken;
                 }
                 else if (*currentChar == '(') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::LeftParenthesis, lexem };
+                    currentToken = { Token::Type::LeftParenthesis, lexem, position };
                     currentState = State::InCompleteToken;
                 }
                 else if (*currentChar == ')') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::RightParenthesis, lexem };
+                    currentToken = { Token::Type::RightParenthesis, lexem, position };
                     currentState = State::InCompleteToken;
                 }
 				else if (*currentChar == '{') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::LeftBrace, lexem };
+                    currentToken = { Token::Type::LeftBrace, lexem, position };
                     currentState = State::InCompleteToken;
 				}
 				else if (*currentChar == '}') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::RightBrace, lexem };
+                    currentToken = { Token::Type::RightBrace, lexem, position };
                     currentState = State::InCompleteToken;
 				}
                 else if (*currentChar == ';') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::Semicolon, lexem };
+                    currentToken = { Token::Type::Semicolon, lexem, position };
                     currentState = State::InCompleteToken;
                 }
                 else if (*currentChar == ':') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::Colon, lexem };
+                    currentToken = { Token::Type::Colon, lexem, position };
                     currentState = State::InCompleteToken;
                 }
                 else if (*currentChar == ',') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = { Token::Type::Comma, lexem };
+                    currentToken = { Token::Type::Comma, lexem, position };
                     currentState = State::InCompleteToken;
                 }
                 else if (*currentChar == '\"') {
@@ -211,10 +216,10 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                 if (it != keywords.end()) {
                     int id = tokens.size();
                     k_meta.set(id, it->second);
-                    currentToken = { Token::Type::Keyword, lexem };
+                    currentToken = { Token::Type::Keyword, lexem, position };
                 }
                 else {
-                    currentToken = { Token::Type::Identifier, lexem };
+                    currentToken = { Token::Type::Identifier, lexem, position };
                 }
 
 				currentState = State::InCompleteToken;
@@ -223,7 +228,7 @@ ParsedProgram Lexer::tokenize(std::string& input) {
 			case State::InString:
 				if (*currentChar == '\"') {
 					++currentChar;
-					currentToken = { Token::Type::String, lexem };
+					currentToken = { Token::Type::String, lexem, position };
 					currentState = State::InCompleteToken;
 				}
 				else {
@@ -248,12 +253,12 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                 if (currentChar != input.end() && isIdentifierStart(*currentChar)) {
                     std::cerr << "{Lexer} Invalid number: " << lexem << *currentChar << std::endl;
 
-                    currentToken = { Token::Type::Number, lexem };
+                    currentToken = { Token::Type::Number, lexem, position };
                     currentState = State::InCompleteToken;
                     break;
                 }
 
-                currentToken = { Token::Type::Number, lexem };
+                currentToken = { Token::Type::Number, lexem, position };
                 currentState = State::InCompleteToken;
                 break;
 
@@ -262,23 +267,28 @@ ParsedProgram Lexer::tokenize(std::string& input) {
                 currentState = State::InNewToken;
                 break;
 		}
+
+        position.column++;
 	}
+
+    currentToken = { Token::Type::EndToken, lexem, position };
+    tokens.push_back(currentToken);
 
 	return program;
 }
 
-const std::unordered_map<std::string, Token::Keyword> Lexer::keywords = {
-	{ "let", Token::Keyword::LET },
-    { "int", Token::Keyword::INT },
-    { "float", Token::Keyword::FLOAT },
-    { "str", Token::Keyword::STR },
-    { "if", Token::Keyword::IF },
-    { "else", Token::Keyword::ELSE },
-    { "for", Token::Keyword::FOR },
-    { "as", Token::Keyword::AS },
-    { "func", Token::Keyword::FUNCTION },
-    { "return", Token::Keyword::RETURN },
-    { "echo", Token::Keyword::ECHO }
+const std::unordered_map<std::string, Keyword> Lexer::keywords = {
+	{ "let", Keyword::LET },
+    { "int", Keyword::INT },
+    { "float", Keyword::FLOAT },
+    { "str", Keyword::STR },
+    { "if", Keyword::IF },
+    { "else", Keyword::ELSE },
+    { "for", Keyword::FOR },
+    { "as", Keyword::AS },
+    { "func", Keyword::FUNCTION },
+    { "return", Keyword::RETURN },
+    { "echo", Keyword::ECHO }
 };
 
 } // namespace lexer

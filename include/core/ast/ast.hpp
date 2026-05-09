@@ -24,6 +24,8 @@ struct Expr {
     virtual void accept(interpreter::Visitor& visitor) = 0;
 };
 
+using Expression = std::unique_ptr<ast::Expr>;
+
 struct BinaryExpr : Expr {
     BinaryExpr(std::unique_ptr<Expr> left, Op op, std::unique_ptr<Expr> right)
         : left(std::move(left)), op(op), right(std::move(right)) {}
@@ -82,6 +84,8 @@ struct Stmt {
     virtual ~Stmt() = default;
     virtual void accept(interpreter::Visitor& visitor) = 0;
 };
+
+using Statement = std::unique_ptr<ast::Stmt>;
 
 struct ExpressionStmt : Stmt {
     ExpressionStmt(std::unique_ptr<Expr> expr) : expr(std::move(expr)) {}

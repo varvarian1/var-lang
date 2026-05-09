@@ -2,17 +2,23 @@
 #include <type_traits>
 
 #include "parser/parser.hpp"
-
 namespace parser {
-std::vector<std::unique_ptr<ast::Stmt>> Parser::parse() {
-    std::vector<std::unique_ptr<ast::Stmt>> statements;
+std::vector<ast::Statement> Parser::parse() {
+    std::vector<ast::Statement> statements;
 
-    while (currentToken.type != Token::Type::EndToken) {
+    while (true) {
         auto stmt = declaration();
-        if (stmt) {
-            statements.push_back(std::move(stmt));
+        if (stmt.ok()) {
+            statements.push_back(std::move(stmt.value()));
+        } else {
+            auto &[ message, token ] = stmt.error();
+            std::cerr << token.pos.filename << ":" << token.pos.line << ":" << token.pos.column << " | " << message << std::endl;
+
+            skipUntil(Token::Type::Semicolon);
+            nextToken();
         }
-        else {
+
+        if (currentToken.type == Token::Type::EndToken) {
             break;
         }
     }
@@ -20,167 +26,184 @@ std::vector<std::unique_ptr<ast::Stmt>> Parser::parse() {
     return statements;
 }
 
-std::unique_ptr<ast::Stmt> Parser::declaration() {
+ParseResult<ast::Statement> Parser::declaration() {
     if (currentToken.type == Token::Type::EndToken) {
-        return nullptr;
+        return ErrorMeta{"Unexpected end of input", currentToken};
     }
 
-    if (match({Token::Keyword::LET})) {
+    if (match({Keyword::LET})) {
         return letDeclaration();
     }
-    else if (check(Token::Type::Identifier) && peekNext().type == Token::Type::Identifier) {
-        return variableDeclaration();
+    else if (check(Token::Type::Identifier)) {
+        auto next = peekNext();
+        if (next && next->type == Token::Type::Identifier) {
+            return variableDeclaration();
+        } else {
+            std::string name = currentToken.text;
+            size_t savedPosition = tokenIndex;
+            Token savedToken = currentToken;
+
+            nextToken();
+
+            if (check(Token::Type::LeftParenthesis)) {
+                tokenIndex = savedPosition;
+                currentToken = savedToken;
+
+                return functionCallStmt();
+            }
+            else {
+                tokenIndex = savedPosition;
+                currentToken = savedToken;
+
+                return ErrorMeta{"Unexpected identifier: " + currentToken.text, currentToken};
+            }
+        }
     }
-    else if (match({Token::Keyword::FUNCTION})) {
+    else if (match({Keyword::FUNCTION})) {
         return functionDeclaration();
     }
-    else if (match({Token::Keyword::IF})) {
+    else if (match({Keyword::IF})) {
         return ifStmt();
     }
-    else if (match({Token::Keyword::RETURN})) {
+    else if (match({Keyword::RETURN})) {
         return returnStmt();
     }
-    else if (match({Token::Keyword::ECHO})) {
+    else if (match({Keyword::ECHO})) {
         return echoStmt();
     }
-    else if (match({Token::Keyword::FOR})) {
+    else if (match({Keyword::FOR})) {
         return forStmt();
     }
     else if (check(Token::Type::LeftBrace)) {
         return block();
     }
-    else if (check(Token::Type::Identifier)) {
-        std::string name = currentToken.text;
-        size_t savedPosition = tokenIndex;
-        Token savedToken = currentToken;
-
-        nextToken();
-
-        if (check(Token::Type::LeftParenthesis)) {
-            tokenIndex = savedPosition;
-            currentToken = savedToken;
-
-            return functionCallStmt();
-        }
-        else {
-            tokenIndex = savedPosition;
-            currentToken = savedToken;
-
-            throw std::runtime_error("Invalid declaration! Current token: " + currentToken.text);
-        }
-    }
     
-    throw std::runtime_error("Invalid declaration! Current token: " + currentToken.text);
+    return ErrorMeta{"Unexpected token: " + currentToken.text, currentToken};
 }
 
-std::unique_ptr<ast::Stmt> Parser::letDeclaration() {
+ParseResult<ast::Statement> Parser::letDeclaration() {
     std::string variableName = currentToken.text;
-    eat(Token::Type::Identifier);
+    TRY(eat(Token::Type::Identifier));
     
-    eat(Token::Type::Colon);
+    TRY(eat(Token::Type::Colon));
     
-    std::string variableType = parseType();
-    
-    std::unique_ptr<ast::Expr> initializer = nullptr;
+    std::string variableType = TRY(parseType());
+
+    ast::Expression initializer = nullptr;
     if (match({Token::Type::Equal})) {
-        initializer = expression();
+        initializer = TRY(expression());
     }
     
-    eat(Token::Type::Semicolon);
+    TRY(eat(Token::Type::Semicolon));
     
-    return std::make_unique<ast::VariableDeclarationStmt>(variableType, variableName, std::move(initializer));
+    return make_ok<ast::VariableDeclarationStmt>(variableType, variableName, std::move(initializer));
 }
 
-std::unique_ptr<ast::Stmt> Parser::functionDeclaration() {
+ParseResult<ast::Statement> Parser::functionDeclaration() {
     std::string functionName = currentToken.text;
-    eat(Token::Type::Identifier);
+    TRY(eat(Token::Type::Identifier));
     
-    eat(Token::Type::LeftParenthesis);
+    TRY(eat(Token::Type::LeftParenthesis));
     std::vector<std::pair<std::string, std::string>> params;
     
     if (!check(Token::Type::RightParenthesis)) {
         do {
-            std::string paramType = parseType();
+            std::string paramType = TRY(parseType());
             std::string paramName = currentToken.text;
 
-            eat(Token::Type::Identifier);
+            TRY(eat(Token::Type::Identifier));
             params.push_back({paramType, paramName});
         }
         while (match({Token::Type::Comma}));
     }
     
-    eat(Token::Type::RightParenthesis);
+    TRY(eat(Token::Type::RightParenthesis));
     
     std::string returnType = "void";
-    if (match({Token::Keyword::AS})) {
-        returnType = parseType();
+    if (match({Keyword::AS})) {
+        returnType = TRY(parseType());
     }
     
-    auto body = block();
-    return std::make_unique<ast::FunctionStmt>(functionName, params, returnType, std::move(body));
+    ast::Statement body = TRY(block());
+    return make_ok<ast::FunctionStmt>(functionName, params, returnType, std::move(body));
 }
 
-std::string Parser::parseType() {
-    if (currentToken.type == Token::Type::Keyword) {
-        std::string type = currentToken.text;
-        nextToken();
-
-        return type;
+ParseResult<std::string> Parser::parseType() {
+    if (currentToken.type != Token::Type::Keyword) {
+        std::string errorMsg = "Expected type";
+        
+        errorMsg += ", but got '" + currentToken.text + "'";
+        
+        if (currentToken.type == Token::Type::Identifier) {
+            errorMsg += " (identifiers cannot be used as types)";
+        }
+        
+        return ErrorMeta{errorMsg, currentToken};
     }
-
-    throw std::runtime_error("Expected type");
+    
+    std::string type = currentToken.text;
+    nextToken();
+    
+    return type;
 }
 
-std::unique_ptr<ast::Stmt> Parser::variableDeclaration() {
-    std::string variableType = parseType();
+ParseResult<ast::Statement> Parser::variableDeclaration() {
+    std::string variableType = TRY(parseType());
     
     std::string variableName = currentToken.text;
-    eat(Token::Type::Identifier);
+    TRY(eat(Token::Type::Identifier));
     
-    std::unique_ptr<ast::Expr> initializer = nullptr;
+    ast::Expression initializer = nullptr;
     if (match({Token::Type::Equal})) {
-        initializer = expression();
+        initializer = TRY(expression());
     }
-    eat(Token::Type::Semicolon);
+    TRY(eat(Token::Type::Semicolon));
 
-    return std::make_unique<ast::VariableDeclarationStmt>(variableType, variableName, std::move(initializer));
+    return make_ok<ast::VariableDeclarationStmt>(variableType, variableName, std::move(initializer));
 }
 
-std::unique_ptr<ast::Stmt> Parser::block() {
-    std::vector<std::unique_ptr<ast::Stmt>> statements;
+ParseResult<ast::Statement> Parser::block() {
+    std::vector<ast::Statement> statements;
 
     if (currentToken.type != Token::Type::LeftBrace) {
-        throw std::runtime_error("Expected '{' at beginning of block");
+        return ErrorMeta{"Expected '{' at beginning of block, but got '" + currentToken.text + "'", currentToken};
     }
     
-    eat(Token::Type::LeftBrace);
+    TRY(eat(Token::Type::LeftBrace));
 
-    while (!check(Token::Type::RightBrace) && !check(Token::Type::EndToken)) {
+    while (true) {
         auto stmt = declaration();
-        if (stmt) {
-            statements.push_back(std::move(stmt));
+        if (stmt.ok()) {
+            statements.push_back(std::move(stmt.value()));
+        } else {
+            auto &[ message, token ] = stmt.error();
+            std::cerr << token.pos.filename << ":" << token.pos.line << ":" << token.pos.column << " | " << message << std::endl;
+
+            skipUntil(Token::Type::Semicolon);
+            nextToken();
         }
-        else {
+
+        if (check(Token::Type::RightBrace) || check(Token::Type::EndToken) || currentToken.type == Token::Type::EndToken) {
             break;
         }
     }
     
     if (check(Token::Type::RightBrace)) {
-        eat(Token::Type::RightBrace);
+        TRY(eat(Token::Type::RightBrace));
     }
     else if (currentToken.type != Token::Type::EndToken) {
-        throw std::runtime_error("Expected '}' but got: " + currentToken.text);
+        return ErrorMeta{"Expected '}' at end of block, but got '" + currentToken.text + "'", currentToken};
     }
 
-    return std::make_unique<ast::BlockStmt>(std::move(statements));
+    return make_ok<ast::BlockStmt>(std::move(statements));
 }
 
-std::unique_ptr<ast::Expr> Parser::expression() {
-    return comparison();
+ParseResult<ast::Expression> Parser::expression() {
+    return TRY(comparison());
 }
 
-std::unique_ptr<ast::Expr> Parser::term() {
-    auto left = factor();
+ParseResult<ast::Expression> Parser::term() {
+    ast::Expression left = TRY(factor());
     
     while (isPlus(currentToken) || isMinus(currentToken)) {
         ast::Op op;
@@ -192,11 +215,11 @@ std::unique_ptr<ast::Expr> Parser::term() {
                 op = ast::Op::Minus;
                 break;
             default:
-                throw std::runtime_error("Expect '+' or '-'");
+                return ErrorMeta{"Expected '+' or '-' in expression, but got '" + currentToken.text + "'", currentToken};
         }
         
         nextToken();
-        auto right = factor();
+        ast::Expression right = TRY(factor());
         left = std::make_unique<ast::BinaryExpr>(std::move(left), op, std::move(right));
     }
     
@@ -211,8 +234,8 @@ bool Parser::isMinus(const Token& token) const {
     return token.type == Token::Type::Minus;
 }
 
-std::unique_ptr<ast::Expr> Parser::comparison() {
-    auto left = term();
+ParseResult<ast::Expression> Parser::comparison() {
+    ast::Expression left = TRY(term());
     
     while (isComparison(currentToken)) {
         ast::ComparisonOp op;
@@ -236,11 +259,11 @@ std::unique_ptr<ast::Expr> Parser::comparison() {
                 op = ast::ComparisonOp::GreaterEqual;
                 break;
             default:
-                throw std::runtime_error("Expect comparison operator");
+                return ErrorMeta{"Expected comparison operator, but got '" + currentToken.text + "'", currentToken};
         }
         
         nextToken();
-        auto right = term();
+        ast::Expression right = TRY(term());
         left = std::make_unique<ast::ComparisonExpr>(std::move(left), op, std::move(right));
     }
     
@@ -256,7 +279,7 @@ bool Parser::isComparison(const Token& token) const {
            token.type == Token::Type::GreaterEqual;
 }
  
-std::unique_ptr<ast::Expr> Parser::factor() {
+ParseResult<ast::Expression> Parser::factor() {
     if (currentToken.type == Token::Type::Number)
         return parseNumber();
 
@@ -268,90 +291,89 @@ std::unique_ptr<ast::Expr> Parser::factor() {
         nextToken();
         
         if (check(Token::Type::LeftParenthesis)) {
-            eat(Token::Type::LeftParenthesis);
-            std::vector<std::unique_ptr<ast::Expr>> args;
+            TRY(eat(Token::Type::LeftParenthesis));
+            std::vector<ast::Expression> args;
             
             if (!check(Token::Type::RightParenthesis)) {
                 do {
-                    args.push_back(expression());
+                    args.push_back(TRY(expression()));
                 } while (match({Token::Type::Comma}));
             }
             
-            eat(Token::Type::RightParenthesis);
-            return std::make_unique<ast::FunctionCall>(name, std::move(args));
+            TRY(eat(Token::Type::RightParenthesis));
+            return make_ok<ast::FunctionCall>(name, std::move(args));
         }
         else {
-            return std::make_unique<ast::Identifier>(name);
+            return make_ok<ast::Identifier>(name);
         }
     }
 
     else if (currentToken.type == Token::Type::LeftParenthesis)
         return parseParenthesizedExpr();
     
-    throw std::runtime_error(
-        "Invalid factor: expected number, variable or '(' but got '" + currentToken.text + "'");
+    return ErrorMeta{"Invalid factor: expected number, variable or '(' but got '" + currentToken.text + "'", currentToken};
 }
 
-std::unique_ptr<ast::Expr> Parser::parseNumber() {
+ParseResult<ast::Expression> Parser::parseNumber() {
     double value = std::stod(currentToken.text);
     nextToken();
 
-    return std::make_unique<ast::LiteralNumber>(value);
+    return make_ok<ast::LiteralNumber>(value);
 }
 
-std::unique_ptr<ast::Expr> Parser::parseString() {
+ParseResult<ast::Expression> Parser::parseString() {
     std::string str = currentToken.text;
     nextToken();
 
-    return std::make_unique<ast::LiteralString>(str);
+    return make_ok<ast::LiteralString>(str);
 }
 
-std::unique_ptr<ast::Expr> Parser::parseParenthesizedExpr() {
-    eat(Token::Type::LeftParenthesis);
-    auto expr = expression();
-    eat(Token::Type::RightParenthesis);
+ParseResult<ast::Expression> Parser::parseParenthesizedExpr() {
+    TRY(eat(Token::Type::LeftParenthesis));
+    ast::Expression expr = TRY(expression());
+    TRY(eat(Token::Type::RightParenthesis));
 
     return expr; 
 }
 
-std::unique_ptr<ast::Expr> Parser::parseFunctionCall(const std::string& name) {
-    eat(Token::Type::LeftParenthesis);
+ParseResult<ast::Expression> Parser::parseFunctionCall(const std::string& name) {
+    TRY(eat(Token::Type::LeftParenthesis));
 
-    std::vector<std::unique_ptr<ast::Expr>> arguments;
+    std::vector<ast::Expression> arguments;
     if (!check(Token::Type::RightParenthesis)) {
         do {
-            arguments.push_back(expression());
+            arguments.push_back(TRY(expression()));
         } while (match({Token::Type::Comma}));
     }
 
-    eat(Token::Type::RightParenthesis);
+    TRY(eat(Token::Type::RightParenthesis));
 
-    return std::make_unique<ast::FunctionCall>(name, std::move(arguments));
+    return make_ok<ast::FunctionCall>(name, std::move(arguments));
 }
 
-std::unique_ptr<ast::Stmt> Parser::assignStmt() {
+ParseResult<ast::Statement> Parser::assignStmt() {
     std::string variableName = currentToken.text;
-    eat(Token::Type::Identifier);
-    eat(Token::Type::Equal);
+    TRY(eat(Token::Type::Identifier));
+    TRY(eat(Token::Type::Equal));
 
-    auto expr = expression();
-    eat(Token::Type::Semicolon);
+    ast::Expression expr = TRY(expression());
+    TRY(eat(Token::Type::Semicolon));
 
-    return std::make_unique<ast::AssignStmt>(variableName, std::move(expr));
+    return make_ok<ast::AssignStmt>(variableName, std::move(expr));
 }
 
-std::unique_ptr<ast::Stmt> Parser::statement() {
-    std::cout << "Statement: current token = " << currentToken.text << std::endl;
+ParseResult<ast::Statement> Parser::statement() {
+    std::cout << "ast::Statement: current token = " << currentToken.text << std::endl;
     
-    if (match({Token::Keyword::LET})) {
+    if (match({Keyword::LET})) {
         std::cout << "Match LET" << std::endl;
         return letDeclaration();
     }
-    else if (match({Token::Keyword::ECHO})) {
+    else if (match({Keyword::ECHO})) {
         std::cout << "Matched ECHO" << std::endl;
         return echoStmt();
     }
-    else if (match({Token::Keyword::RETURN})) {
+    else if (match({Keyword::RETURN})) {
         std::cout << "Matched RETURN" << std::endl;
         return returnStmt();
     }
@@ -381,96 +403,97 @@ std::unique_ptr<ast::Stmt> Parser::statement() {
         }
     }
     
-    std::cout << "No match found for: " << currentToken.text << std::endl;
-    throw std::runtime_error("Invalid statement");
+    return ErrorMeta{"Unexpected token in statement: '" + currentToken.text + "'", currentToken};
 }
 
-std::unique_ptr<ast::Stmt> Parser::functionCallStmt() {
+ParseResult<ast::Statement> Parser::functionCallStmt() {
     std::string name = currentToken.text;
-    eat(Token::Type::Identifier);
+    TRY(eat(Token::Type::Identifier));
     
-    eat(Token::Type::LeftParenthesis);
+    TRY(eat(Token::Type::LeftParenthesis));
     
-    std::vector<std::unique_ptr<ast::Expr>> arguments;
+    std::vector<ast::Expression> arguments;
     
     if (!check(Token::Type::RightParenthesis)) {
         do {
-            arguments.push_back(expression());
+            arguments.push_back(TRY(expression()));
         } while (match({Token::Type::Comma}));
     }
     
-    eat(Token::Type::RightParenthesis);
-    eat(Token::Type::Semicolon);
+    TRY(eat(Token::Type::RightParenthesis));
+    TRY(eat(Token::Type::Semicolon));
     
     auto functionCall = std::make_unique<ast::FunctionCall>(name, std::move(arguments));
-    return std::make_unique<ast::ExpressionStmt>(std::move(functionCall));
+    return make_ok<ast::ExpressionStmt>(std::move(functionCall));
 }
 
-std::unique_ptr<ast::Stmt> Parser::ifStmt() {
-    eat(Token::Type::LeftParenthesis);
-    auto condition = expression();
-    eat(Token::Type::RightParenthesis);
+ParseResult<ast::Statement> Parser::ifStmt() {
+    TRY(eat(Token::Type::LeftParenthesis));
+    auto condition = TRY(expression());
+    TRY(eat(Token::Type::RightParenthesis));
     
-    auto thenBranch = block();
-    std::unique_ptr<ast::Stmt> elseBranch = nullptr;
+    auto thenBranch = TRY(block());
+    ast::Statement elseBranch = nullptr;
     
     if (currentToken.type == Token::Type::Keyword) {
         auto& [_, k_meta] = program;
-        Token::Keyword* keyword = k_meta.get(tokenIndex);
-        if (keyword && *keyword == Token::Keyword::ELSE) {
+        Keyword* keyword = k_meta.get(tokenIndex);
+        if (keyword && *keyword == Keyword::ELSE) {
             nextToken();
-            elseBranch = block();
+            elseBranch = TRY(block());
         }
     }
     
-    return std::make_unique<ast::IfStmt>(std::move(condition), std::move(thenBranch), std::move(elseBranch));
+    return make_ok<ast::IfStmt>(std::move(condition), std::move(thenBranch), std::move(elseBranch));
 }
 
-std::unique_ptr<ast::Stmt> Parser::forStmt() {
-    eat(Token::Type::LeftParenthesis);
+ParseResult<ast::Statement> Parser::forStmt() {
+    TRY(eat(Token::Type::LeftParenthesis));
     
-    std::unique_ptr<ast::Stmt> initializer = nullptr;
-    std::unique_ptr<ast::Expr> condition = nullptr;
-    std::unique_ptr<ast::Stmt> increment = nullptr;
+    ast::Statement initializer;
+    ast::Expression condition = nullptr;
+    ast::Statement increment = nullptr;
     
     if (!check(Token::Type::Semicolon)) {
-        if (match({Token::Keyword::LET})) {
+        if (match({Keyword::LET})) {
             std::string variableName = currentToken.text;
-            eat(Token::Type::Identifier);
+            TRY(eat(Token::Type::Identifier));
             
-            eat(Token::Type::Colon);
+            TRY(eat(Token::Type::Colon));
             
-            std::string variableType = parseType();
+            std::string variableType = TRY(parseType());
             
-            std::unique_ptr<ast::Expr> initialValue = nullptr;
+            ast::Expression initialValue = nullptr;
             if (match({Token::Type::Equal})) {
-                initialValue = expression();
+                initialValue = TRY(expression());
             }
             
             initializer = std::make_unique<ast::VariableDeclarationStmt>(
                 variableType, variableName, std::move(initialValue)
             );
         }
-        else if (check(Token::Type::Identifier) && peekNext().type == Token::Type::Identifier) {
-            initializer = variableDeclaration();
-        }
         else if (check(Token::Type::Identifier)) {
-            initializer = assignStmt();
+            auto next = peekNext();
+            if (next && next->type == Token::Type::Identifier) {
+                initializer = TRY(variableDeclaration());
+            } else {
+                initializer = TRY(assignStmt());
+            }
         }
     }
     
-    eat(Token::Type::Semicolon);
+    TRY(eat(Token::Type::Semicolon));
     
     if (!check(Token::Type::Semicolon)) {
-        condition = expression();
+        condition = TRY(expression());
     }
     
-    eat(Token::Type::Semicolon);
+    TRY(eat(Token::Type::Semicolon));
     
     if (!check(Token::Type::RightParenthesis)) {
         if (check(Token::Type::Identifier)) {
             std::string varName = currentToken.text;
-            eat(Token::Type::Identifier);
+            TRY(eat(Token::Type::Identifier));
             
             if (match({Token::Type::Plus, Token::Type::Plus})) {
                 auto right = std::make_unique<ast::BinaryExpr>(
@@ -481,26 +504,26 @@ std::unique_ptr<ast::Stmt> Parser::forStmt() {
                 increment = std::make_unique<ast::AssignStmt>(varName, std::move(right));
             }
             else if (match({Token::Type::Equal})) {
-                auto expr = expression();
+                auto expr = TRY(expression());
                 increment = std::make_unique<ast::AssignStmt>(varName, std::move(expr));
             }
             else {
-                throw std::runtime_error("Expected '++' or '=' in for loop increment");
+                return ErrorMeta{"Expected '++' or '=' in for loop increment, but got '" + currentToken.text + "'", currentToken};
             }
         }
     }
     
-    eat(Token::Type::RightParenthesis);
+    TRY(eat(Token::Type::RightParenthesis));
     
-    std::unique_ptr<ast::Stmt> body;
+    ast::Statement body;
     if (check(Token::Type::LeftBrace)) {
-        body = block();
+        body = TRY(block());
     }
     else {
-        body = statement();
+        body = TRY(statement());
     }
     
-    return std::make_unique<ast::ForStmt>(
+    return make_ok<ast::ForStmt>(
         std::move(initializer),
         std::move(condition),
         std::move(increment),
@@ -508,18 +531,18 @@ std::unique_ptr<ast::Stmt> Parser::forStmt() {
     );
 }
 
-std::unique_ptr<ast::Stmt> Parser::returnStmt() {
-    auto expr = expression();
-    eat(Token::Type::Semicolon);
+ParseResult<ast::Statement> Parser::returnStmt() {
+    ast::Expression expr = TRY(expression());
+    TRY(eat(Token::Type::Semicolon));
 
-    return std::make_unique<ast::ReturnStmt>(std::move(expr));
+    return make_ok<ast::ReturnStmt>(std::move(expr));
 }
 
-std::unique_ptr<ast::Stmt> Parser::echoStmt() {
-    auto expr = expression();
-    eat(Token::Type::Semicolon);
+ParseResult<ast::Statement> Parser::echoStmt() {
+    ast::Expression expr = TRY(expression());
+    TRY(eat(Token::Type::Semicolon));
 
-    return std::make_unique<ast::EchoStmt>(std::move(expr));
+    return make_ok<ast::EchoStmt>(std::move(expr));
 }
 
 bool Parser::check(Token::Type type) const {
@@ -529,24 +552,32 @@ bool Parser::check(Token::Type type) const {
     return currentToken.type == type;
 }
 
-Token Parser::nextToken() {
+std::optional<Token> Parser::skipUntil(Token::Type type) {
+    while (currentToken.type != Token::Type::EndToken) {
+        if (currentToken.type == type) {
+            return currentToken;
+        }
+        nextToken();
+    }
+    return std::nullopt;
+}
+
+std::optional<Token> Parser::nextToken() {
     if (tokenIndex + 1 < tokensVector.size()) {
         tokenIndex++;
         currentToken = tokensVector[tokenIndex];
-    } 
-    else {
-        currentToken = {Token::Type::EndToken, ""};
+        return currentToken;
     }
 
-    return currentToken;
+    return std::nullopt;
 }
 
-Token Parser::peekNext() const {
+std::optional<Token> Parser::peekNext() const {
     if (tokenIndex + 1 < tokensVector.size()) {
         return tokensVector[tokenIndex + 1];
     }
 
-    return {Token::Type::EndToken, ""};
+    return std::nullopt;
 }
 
 } // namespace parser

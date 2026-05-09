@@ -135,36 +135,36 @@ void logger::Logger::lexerLog(ParsedProgram& program) {
             case Token::Type::Keyword: {
                 if (auto* keyword = k_meta.get(idx)) {
                     switch (*keyword) {
-                        case Token::Keyword::LET:
+                        case Keyword::LET:
                             logFile << "let     ";
-                        case Token::Keyword::INT:
+                        case Keyword::INT:
                             logFile << "int	";
                             break;
-                        case Token::Keyword::FLOAT:
+                        case Keyword::FLOAT:
                             logFile << "float	";
                             break;
-                        case Token::Keyword::STR:
+                        case Keyword::STR:
                             logFile << "str  	";
                             break;
-                        case Token::Keyword::IF:
+                        case Keyword::IF:
                             logFile << "if      ";
                             break;
-                        case Token::Keyword::ELSE:
+                        case Keyword::ELSE:
                             logFile << "else    ";
                             break;
-                        case Token::Keyword::FOR:
+                        case Keyword::FOR:
                             logFile << "for     ";
                             break;
-                        case Token::Keyword::AS:
+                        case Keyword::AS:
                             logFile << "as	    ";
                             break;
-                        case Token::Keyword::FUNCTION:
+                        case Keyword::FUNCTION:
                             logFile << "function";
                             break;
-                        case Token::Keyword::RETURN:
+                        case Keyword::RETURN:
                             logFile << "return  ";
                             break;
-                        case Token::Keyword::ECHO:
+                        case Keyword::ECHO:
                             logFile << "echo    ";
                             break;
                     }

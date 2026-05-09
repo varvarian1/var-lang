@@ -10,7 +10,7 @@ class Lexer {
 public:
 	
 	/* Tokenize the input string. */
-	ParsedProgram tokenize(std::string& input);
+	ParsedProgram tokenize(std::string& file, std::string& input);
 
 	// Check if character is a digit (0-9)
 	inline bool isDigit(char ch) {
@@ -38,7 +38,7 @@ public:
     }
 
 	// Static map of keyword strings to their corresponding Keyword enum values
-	static const std::unordered_map<std::string, Token::Keyword> keywords;
+	static const std::unordered_map<std::string, Keyword> keywords;
 };
 
 } // namespace lexer

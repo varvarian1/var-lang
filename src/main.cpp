@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
     logger::Logger lexerLog("log/lexer.log", logger::REWRITE);
 
     lexer::Lexer lexer;
-    auto program = lexer.tokenize(input);
+    auto program = lexer.tokenize(filePath, input);
     
     logger.log(logger::INFO, "Lexical analysis completed");
     lexerLog.lexerLog(program);

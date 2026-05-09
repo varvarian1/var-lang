@@ -42,7 +42,7 @@ struct Value {
 struct Function {
     std::string name;
     std::vector<std::pair<std::string, std::string>> params;
-    std::unique_ptr<ast::Stmt> body;
+    ast::Statement body;
     std::string returnType;
 };
 

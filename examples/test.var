@@ -1,3 +1,8 @@
+func myFunc() as int {
+    echo("Some text");
+    return 0;
+}
+
 func main() as int {
     let x: int = 10;
 
@@ -9,8 +14,10 @@ func main() as int {
     }
 
     for (let i: int = 0; i < 11; i = i + 1) {
-        echo("some text");
+        echo(i);
     }
+
+    myFunc();
 
     echo("end");
 
