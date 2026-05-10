@@ -1,0 +1,388 @@
+// VAR demo: численные алгоритмы и комбинаторика
+// Работает на всём, что есть в текущем VAR:
+// - функции с параметрами и return
+// - if/else, for-loop
+// - арифметика, сравнения
+// - вложенные вызовы, рекурсия
+
+func abs(int n) as int {
+    if (n < 0) {
+        return 0 - n;
+    }
+    return n;
+}
+
+func max(int a, int b) as int {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+func min(int a, int b) as int {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
+
+func pow(int base, int exp) as int {
+    int result = 1;
+    for (int i = 0; i < exp; i++) {
+        result = result * base;
+    }
+    return result;
+}
+
+func factorial(int n) as int {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+func fib(int n) as int {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+func fib_iter(int n) as int {
+    int a = 0;
+    int b = 1;
+    int tmp = 0;
+    for (int i = 0; i < n; i++) {
+        tmp = a + b;
+        a = b;
+        b = tmp;
+    }
+    return a;
+}
+
+func gcd(int a, int b) as int {
+    int x = abs(a);
+    int y = abs(b);
+    int tmp = 0;
+    for (int i = 0; i < 1000; i++) {
+        if (y == 0) {
+            return x;
+        }
+        tmp = y;
+        y = x - (x / y) * y;
+        x = tmp;
+    }
+    return x;
+}
+
+func lcm(int a, int b) as int {
+    int g = gcd(a, b);
+    if (g == 0) {
+        return 0;
+    }
+    return (a * b) / g;
+}
+
+func is_prime(int n) as int {
+    if (n < 2) {
+        return 0;
+    }
+    if (n == 2) {
+        return 1;
+    }
+    int rem = 0;
+    for (int i = 2; i * i <= n; i++) {
+        rem = n - (n / i) * i;
+        if (rem == 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+func count_primes(int upto) as int {
+    int count = 0;
+    for (int i = 2; i <= upto; i++) {
+        if (is_prime(i) == 1) {
+            count = count + 1;
+        }
+    }
+    return count;
+}
+
+func sum_to(int n) as int {
+    int s = 0;
+    for (int i = 1; i <= n; i++) {
+        s = s + i;
+    }
+    return s;
+}
+
+func sum_squares(int n) as int {
+    int s = 0;
+    for (int i = 1; i <= n; i++) {
+        s = s + i * i;
+    }
+    return s;
+}
+
+func ackermann(int m, int n) as int {
+    if (m == 0) {
+        return n + 1;
+    }
+    if (n == 0) {
+        return ackermann(m - 1, 1);
+    }
+    return ackermann(m - 1, ackermann(m, n - 1));
+}
+
+func binomial(int n, int k) as int {
+    if (k < 0) {
+        return 0;
+    }
+    if (k > n) {
+        return 0;
+    }
+    if (k == 0) {
+        return 1;
+    }
+    if (k == n) {
+        return 1;
+    }
+    return binomial(n - 1, k - 1) + binomial(n - 1, k);
+}
+
+func collatz_length(int n) as int {
+    int steps = 0;
+    int current = n;
+    for (int i = 0; i < 10000; i++) {
+        if (current == 1) {
+            return steps;
+        }
+        int half = current / 2;
+        if (current - half * 2 == 0) {
+            current = half;
+        } else {
+            current = 3 * current + 1;
+        }
+        steps = steps + 1;
+    }
+    return 0 - 1;
+}
+
+func longest_collatz(int upto) as int {
+    int best_n = 1;
+    int best_len = 0;
+    int len = 0;
+    for (int i = 1; i <= upto; i++) {
+        len = collatz_length(i);
+        if (len > best_len) {
+            best_len = len;
+            best_n = i;
+        }
+    }
+    return best_n;
+}
+
+func divisor_sum(int n) as int {
+    int s = 0;
+    int rem = 0;
+    for (int i = 1; i <= n; i++) {
+        rem = n - (n / i) * i;
+        if (rem == 0) {
+            s = s + i;
+        }
+    }
+    return s;
+}
+
+func is_perfect(int n) as int {
+    if (divisor_sum(n) == 2 * n) {
+        return 1;
+    }
+    return 0;
+}
+
+func count_perfect(int upto) as int {
+    int count = 0;
+    for (int i = 2; i <= upto; i++) {
+        if (is_perfect(i) == 1) {
+            count = count + 1;
+        }
+    }
+    return count;
+}
+
+// Печать таблицы умножения (без массивов это всё, что мы можем)
+func print_mul_table(int size) as int {
+    for (int i = 1; i <= size; i++) {
+        for (int j = 1; j <= size; j++) {
+            echo(i * j);
+        }
+        echo("---");
+    }
+    return 0;
+}
+
+// Имитация stride-логики через арифметику
+func nth_triangular(int n) as int {
+    return (n * (n + 1)) / 2;
+}
+
+func triangular_sum(int upto) as int {
+    int s = 0;
+    for (int i = 1; i <= upto; i++) {
+        s = s + nth_triangular(i);
+    }
+    return s;
+}
+
+// Простая характеристика числа: цифры в десятичной записи
+func digit_count(int n) as int {
+    int x = abs(n);
+    if (x == 0) {
+        return 1;
+    }
+    int count = 0;
+    for (int i = 0; i < 100; i++) {
+        if (x == 0) {
+            return count;
+        }
+        x = x / 10;
+        count = count + 1;
+    }
+    return count;
+}
+
+func reverse_number(int n) as int {
+    int x = abs(n);
+    int reversed = 0;
+    int digit = 0;
+    for (int i = 0; i < 100; i++) {
+        if (x == 0) {
+            return reversed;
+        }
+        digit = x - (x / 10) * 10;
+        reversed = reversed * 10 + digit;
+        x = x / 10;
+    }
+    return reversed;
+}
+
+func is_palindrome(int n) as int {
+    if (reverse_number(n) == n) {
+        return 1;
+    }
+    return 0;
+}
+
+func count_palindromes(int upto) as int {
+    int count = 0;
+    for (int i = 1; i <= upto; i++) {
+        if (is_palindrome(i) == 1) {
+            count = count + 1;
+        }
+    }
+    return count;
+}
+
+// Двоичная запись через рекурсию печати
+func print_binary(int n) as int {
+    if (n == 0) {
+        return 0;
+    }
+    int half = n / 2;
+    int bit = n - half * 2;
+    print_binary(half);
+    echo(bit);
+    return 0;
+}
+
+// Численное приближение через ряд
+func approx_pi_squared_over_six(int terms) as int {
+    // sum of 1000000 / k^2 for k = 1..terms (целочисленная аппроксимация)
+    int s = 0;
+    for (int k = 1; k <= terms; k++) {
+        s = s + 1000000 / (k * k);
+    }
+    return s;
+}
+
+func main() as int {
+    echo("=== Basic arithmetic ===");
+    echo(abs(0 - 42));
+    echo(max(15, 23));
+    echo(min(15, 23));
+    echo(pow(2, 10));
+    echo(pow(3, 5));
+
+    echo("=== Factorials ===");
+    for (int i = 0; i < 10; i++) {
+        echo(factorial(i));
+    }
+
+    echo("=== Fibonacci (recursive) ===");
+    for (int i = 0; i < 15; i++) {
+        echo(fib(i));
+    }
+
+    echo("=== Fibonacci (iterative) ===");
+    for (int i = 0; i < 20; i++) {
+        echo(fib_iter(i));
+    }
+
+    echo("=== GCD and LCM ===");
+    echo(gcd(48, 18));
+    echo(gcd(100, 75));
+    echo(lcm(4, 6));
+    echo(lcm(21, 14));
+
+    echo("=== Primes ===");
+    echo(count_primes(100));
+    echo(count_primes(1000));
+
+    echo("=== Sums ===");
+    echo(sum_to(100));
+    echo(sum_squares(10));
+    echo(triangular_sum(10));
+
+    echo("=== Ackermann (small values only!) ===");
+    echo(ackermann(2, 3));
+    echo(ackermann(3, 3));
+    echo(ackermann(3, 4));
+
+    echo("=== Pascal's triangle row 10 ===");
+    for (int k = 0; k <= 10; k++) {
+        echo(binomial(10, k));
+    }
+
+    echo("=== Collatz ===");
+    echo(collatz_length(27));
+    echo(longest_collatz(100));
+
+    echo("=== Perfect numbers up to 1000 ===");
+    echo(count_perfect(1000));
+
+    echo("=== Palindromes ===");
+    echo(count_palindromes(1000));
+    echo(reverse_number(12345));
+
+    echo("=== Digit count ===");
+    echo(digit_count(0));
+    echo(digit_count(7));
+    echo(digit_count(123456789));
+
+    echo("=== Pi^2/6 approximation (x1000000) ===");
+    echo(approx_pi_squared_over_six(100));
+    echo(approx_pi_squared_over_six(1000));
+    // настоящее значение pi^2/6 ~ 1.6449, умножено на 1000000 ~ 1644934
+
+    echo("=== Multiplication table 5x5 ===");
+    print_mul_table(5);
+
+    echo("=== Binary of 42 ===");
+    print_binary(42);
+
+    echo("=== Done ===");
+    return 0;
+}

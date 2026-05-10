@@ -1,4 +1,4 @@
 func main() as int {
-    let message: str = "Hello, VAR!";
+    str message = "Hello, VAR!";
     echo(message);
 }

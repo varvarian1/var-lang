@@ -4,38 +4,31 @@
 #include <vector>
 #include <memory>
 #include <optional>
-#include <string_view>
 
-#define TOKEN_TYPE_LIST  \
-    X(Unknown)           \
-    X(Number)            \
-    X(String)            \
-    X(Identifier)        \
-    X(Keyword)           \
-    X(LeftParenthesis)   \
-    X(RightParenthesis)  \
-    X(LeftBrace)         \
-    X(RightBrace)        \
-    X(Semicolon)         \
-    X(Colon)             \
-    X(Comma)             \
-    X(Plus)              \
-    X(Minus)             \
-    X(Mult)              \
-    X(Div)               \
-    X(Equal)             \
-    X(PlusEqual)         \
-    X(MinusEqual)        \
-    X(NotEqual)          \
-    X(LessEqual)         \
-    X(GreaterEqual)      \
-    X(Assign)            \
-    X(Less)              \
-    X(Greater)           \
-    X(Increment)         \
-    X(Decrement)         \
-    X(EndToken)
+namespace token {
 
+#define TOKEN_TYPE_LIST \
+    X(Unknown)          \
+    X(Number)           \
+    X(String)           \
+    X(Identifier)       \
+    X(Keyword)          \
+    X(LeftParenthesis)  \
+    X(RightParenthesis) \
+    X(LeftBrace)        \
+    X(RightBrace)       \
+    X(Semicolon)        \
+    X(Colon)            \
+    X(Comma)            \
+    X(Not)              \
+    X(Equal)            \
+    X(Less)             \
+    X(Greater)          \
+    X(Plus)             \
+    X(Minus)            \
+    X(Asterisk)         \
+    X(Slash)            \
+    X(EndToken)         \
 
 struct Token {
     enum class Type {
@@ -45,7 +38,7 @@ struct Token {
     };
 
     struct Position {
-        std::string_view filename;
+        std::string filename;
         size_t line = 1;
         size_t column = 1;
     } pos;
@@ -62,19 +55,20 @@ static std::string token_type_to_string(Token::Type type) {
         #define X(name) case Token::Type::name: return #name;
                 TOKEN_TYPE_LIST
         #undef X
-        default: return "Unknown";
     }
+
+    return "Unknown";
 }
 
 template<typename T>
 struct MetaChannel {
     std::vector<std::optional<T>> data;
 
-    T* get(size_t token) {
-        if (token >= data.size()) return nullptr;
-        if (!data[token]) return nullptr;
+    std::optional<T> get(size_t token) {
+        if (token >= data.size()) return std::nullopt;
+        if (!data[token]) return std::nullopt;
         
-        return &*data[token];
+        return data[token];
     }
 
     void set(size_t token, T value) {
@@ -86,17 +80,16 @@ struct MetaChannel {
 };
 
 #define KEYWORD_LIST   \
-    X(LET)             \
     X(INT)             \
     X(FLOAT)           \
     X(STR)             \
+    X(BOOL)            \
     X(IF)              \
     X(ELSE)            \
     X(FOR)             \
     X(AS)              \
     X(FUNCTION)        \
-    X(RETURN)          \
-    X(ECHO)
+    X(RETURN)
 
 enum class Keyword {
     #define X(name) name,
@@ -109,11 +102,15 @@ static std::string keyword_to_string(Keyword keyword) {
         #define X(name) case Keyword::name: return #name;
                 KEYWORD_LIST
         #undef X
-        default: return "Unknown";
     }
+
+    return "Unknown";
 }
+
 struct ParsedProgram {
     std::vector<Token> tokens;
 
     MetaChannel<Keyword> keyword;
 };
+
+}

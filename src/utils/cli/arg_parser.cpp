@@ -1,39 +1,78 @@
 #include <iostream>
 #include <getopt.h>
 #include <fstream>
+#include <cstdlib>
 
 #include "cli/arg_parser.hpp"
 
 namespace cli {
 bool CLIAParser::parse(int argc, char **argv) {
-    int opt;
 
-    while ((opt = getopt(argc, argv, "ht")) != -1) {
+    check_flag = false;
+    eval_flag = false;
+    repl_flag = false;
+
+    static struct option longOptions[] = {
+        {"help", no_argument, 0, 'h'}, 
+        {"check", no_argument, 0, 'c'},
+        {"eval", required_argument, 0, 'e'},
+        {0, 0, 0, 0}    
+    };
+
+    int opt;
+    int optIndex = 0;
+    
+    opterr = 0;
+
+    while ((opt = getopt_long(argc, argv, ":hce:", longOptions, &optIndex)) != -1) {
         switch (opt) {
             case 'h':
                 help();
+                exit(0);
                 break;
-            case 't':
-                readLog("../log/lexer.log");
+            case 'c':
+                check_flag = true;
                 break;
-            case 'a':
-                readLog("../log/ast.log");
+            case 'e':
+                eval_flag = true;
+                if (optarg && optarg[0] != '-') {
+                    eval_code = optarg;
+                } 
+                else if (optind < argc && argv[optind][0] != '-') {
+                    eval_code = argv[optind];
+                    optind++;
+                } 
+                else {
+                    repl_flag = true;
+                }
                 break;
+            case ':':
+                if (optopt == 'e') {
+                    eval_flag = true;
+                    repl_flag = true;
+                }
+                break;
+            case '?':
             default:
-                std::cerr << "Unknown argument. Use -h for help.\n";
+                if (optopt == 'e') {
+                    eval_flag = true;
+                    repl_flag = true;
+                } else {
+                    std::cerr << "Unknown argument. Use -h for help.\n";
+                }
                 break;
         }
+    }
+
+    if (check_flag) {
+        std::cout << "Running syntax check..." << std::endl;
     }
 
     for (int i = optind; i < argc; i++) {
         args.push_back(argv[i]);
     }
 
-    if (args.size() > 0) {
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
 void CLIAParser::help() {
@@ -41,22 +80,8 @@ void CLIAParser::help() {
               << "A interpreter for the VAR programming language.\n\n"
               << "Options:\n"
               << "  -h, --help          display this help and exit\n"
-              << "  -t, --tokens        display tokens\n"
-              << "  -a, --ast           display abstract syntax tree\n\n";
-}
-
-void CLIAParser::readLog(std::string filename) {
-    std::string line;
-    std::ifstream file(filename);
-
-    if (!file.is_open()) {
-        std::cerr << "Error: can't open '" << filename << "' file." << std::endl;
-    }
-
-    while (getline(file, line)) {
-        std::cout << line << std::endl;
-    }
-    file.close();
+              << "  -c, --check         check syntax without executing\n"
+              << "  -e  --eval [CODE]   execute CODE or enter REPL mode if no CODE\n\n";
 }
 
 } // namespace cli

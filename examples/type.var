@@ -1,0 +1,13 @@
+// some comment
+func main() as int {
+    int x = 10 * 10;
+    echo(x);
+
+    float y = 11.1 * 2.0;
+    echo(y);
+
+    str z = "text";
+    echo(z);
+
+    return 0;
+}

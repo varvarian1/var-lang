@@ -3,7 +3,7 @@
 #include "lexer/lexer.hpp"
 
 namespace lexer {
-ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
+ParsedProgram Lexer::tokenize(std::string& input, std::string file) {
     ParsedProgram program;
 	auto& [ tokens, k_meta ] = program; // tokens vector + keyword metadata
 	
@@ -23,6 +23,8 @@ ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
 
 	auto currentChar = input.begin();
 	while (currentChar != input.end()) {
+        int id = tokens.size();
+
 		switch (currentState) {
 			case State::InNewToken:
 				lexem.clear();
@@ -33,6 +35,7 @@ ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
                         position.line++;
                         position.column = 1;
                     }
+                    position.column++;
 		            ++currentChar;
                     continue;
                 }
@@ -52,154 +55,109 @@ ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
                 }
 
                 else if (*currentChar == '=') {
-                    if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
-                        lexem = "==";
-                        currentChar += 2;
-                        currentToken = {Token::Type::Equal, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                    else {
-                        lexem = '=';
-                        ++currentChar;
-                        currentToken = {Token::Type::Equal, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                }
-                else if (*currentChar == '!') {
-                    if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
-                        lexem = "!=";
-                        currentChar += 2;
-                        currentToken = {Token::Type::NotEqual, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                }
-                else if (*currentChar == '<') {
-                    if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
-                        lexem = "<=";
-                        currentChar += 2;
-                        currentToken = {Token::Type::LessEqual, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                    else {
-                        lexem = '<';
-                        ++currentChar;
-                        currentToken = {Token::Type::Less, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                }
-                else if (*currentChar == '>') {
-                    if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
-                        lexem = ">=";
-                        currentChar += 2;
-                        currentToken = {Token::Type::GreaterEqual, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                    else {
-                        lexem = '>';
-                        ++currentChar;
-                        currentToken = {Token::Type::Greater, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-                }
-                else if (*currentChar == '+') {
-					if (currentChar + 1 != input.end() && *(currentChar + 1) == '+') {
-						lexem = "++";
-						currentChar += 2;
-						currentToken = {Token::Type::Increment, lexem, position};
-						currentState = State::InCompleteToken;
-					}
-                    else if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
-                        lexem = "+=";
-                        currentChar += 2;
-                        currentToken = {Token::Type::PlusEqual, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-					else {
-						lexem = '+';
-						++currentChar;
-						currentToken = {Token::Type::Plus, lexem, position};
-						currentState = State::InCompleteToken;
-					}
-                }
-                else if (*currentChar == '-') {
-					if (currentChar + 1 != input.end() && *(currentChar + 1) == '-') {
-						lexem = "--";
-						currentChar += 2;
-						currentToken = {Token::Type::Decrement, lexem, position};
-						currentState = State::InCompleteToken;	
-					}
-                    else if (currentChar + 1 != input.end() && *(currentChar + 1) == '=') {
-                        lexem = "-=";
-                        currentChar += 2;
-                        currentToken = {Token::Type::MinusEqual, lexem, position};
-                        currentState = State::InCompleteToken;
-                    }
-					else {
-						lexem = '-';
-						++currentChar;
-						currentToken = {Token::Type::Minus, lexem, position};
-						currentState = State::InCompleteToken;
-					}
-                }
-                else if (*currentChar == '*') {
+                    lexem = '=';
+                    ++currentChar;
+                    currentToken = {Token::Type::Equal, lexem, position};
+                    currentState = State::InCompleteToken;
+                } else if (*currentChar == '!') {
+                    lexem = "!";
+                    ++currentChar;
+                    currentToken = {Token::Type::Not, lexem, position};
+                    currentState = State::InCompleteToken;
+                } else if (*currentChar == '<') {
+                    lexem = '<';
+                    ++currentChar;
+                    currentToken = {Token::Type::Less, lexem, position};
+                    currentState = State::InCompleteToken;
+                } else if (*currentChar == '>') {
+                    lexem = '>';
+                    ++currentChar;
+                    currentToken = {Token::Type::Greater, lexem, position};
+                    currentState = State::InCompleteToken;
+                } else if (*currentChar == '+') {
+                    lexem = '+';
+                    ++currentChar;
+                    currentToken = {Token::Type::Plus, lexem, position};
+					currentState = State::InCompleteToken;
+                } else if (*currentChar == '-') {
+                    lexem = '-';
+                    ++currentChar;
+                    currentToken = {Token::Type::Minus, lexem, position};
+                    currentState = State::InCompleteToken;
+                } else if (*currentChar == '*') {
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = {Token::Type::Mult, lexem, position};
+                    currentToken = {Token::Type::Asterisk, lexem, position};
                     currentState = State::InCompleteToken;
-                }
-                else if (*currentChar == '/') {
+                } else if (*currentChar == '/') {
+                    if ((currentChar + 1) != input.end() && *(currentChar + 1) == '/') {
+                        // Skip single-line comment: // ... \n
+                        currentChar += 2;
+                        while (currentChar != input.end() && *currentChar != '\n') {
+                            ++currentChar;
+                        }
+                        continue; // handle \n/whitespace on the next iteration
+
+                    } else if ((currentChar + 1) != input.end() && *(currentChar + 1) == '*') {
+                        // Skip multi-line comment
+                        currentChar += 2;
+                        while (currentChar != input.end() && !(*currentChar == '*' && (currentChar + 1) != input.end() && *(currentChar + 1) == '/')) {
+                            if (*currentChar == '\n') {
+                                position.line++;
+                                position.column = 1;
+                            }
+                            ++currentChar;
+                        }
+                        if (currentChar != input.end()) {
+                            currentChar += 2; // Skip the closing */
+                        }
+
+                        continue; // Start next iteration to handle the next token
+                    }
+
                     lexem += *currentChar;
                     ++currentChar;
-                    currentToken = {Token::Type::Div, lexem, position};
+                    currentToken = {Token::Type::Slash, lexem, position};
                     currentState = State::InCompleteToken;
-                }
-                else if (*currentChar == '(') {
+                } else if (*currentChar == '(') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::LeftParenthesis, lexem, position };
                     currentState = State::InCompleteToken;
-                }
-                else if (*currentChar == ')') {
+                } else if (*currentChar == ')') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::RightParenthesis, lexem, position };
                     currentState = State::InCompleteToken;
-                }
-				else if (*currentChar == '{') {
+                } else if (*currentChar == '{') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::LeftBrace, lexem, position };
                     currentState = State::InCompleteToken;
-				}
-				else if (*currentChar == '}') {
+				} else if (*currentChar == '}') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::RightBrace, lexem, position };
                     currentState = State::InCompleteToken;
-				}
-                else if (*currentChar == ';') {
+				} else if (*currentChar == ';') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::Semicolon, lexem, position };
                     currentState = State::InCompleteToken;
-                }
-                else if (*currentChar == ':') {
+                } else if (*currentChar == ':') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::Colon, lexem, position };
                     currentState = State::InCompleteToken;
-                }
-                else if (*currentChar == ',') {
+                } else if (*currentChar == ',') {
                     lexem += *currentChar;
                     ++currentChar;
                     currentToken = { Token::Type::Comma, lexem, position };
                     currentState = State::InCompleteToken;
-                }
-                else if (*currentChar == '\"') {
+                } else if (*currentChar == '\"') {
                     ++currentChar;
                     currentState = State::InString;
-                }
-                else {
+                } else {
                     lexem += *currentChar;
                     ++currentChar;
                     currentState = State::InIdentifier;
@@ -214,11 +172,9 @@ ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
 
                 auto it = keywords.find(lexem);
                 if (it != keywords.end()) {
-                    int id = tokens.size();
                     k_meta.set(id, it->second);
                     currentToken = { Token::Type::Keyword, lexem, position };
-                }
-                else {
+                } else {
                     currentToken = { Token::Type::Identifier, lexem, position };
                 }
 
@@ -263,13 +219,20 @@ ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
                 break;
 
 			case State::InCompleteToken:
+                position.column += currentToken.text.size();
                 tokens.push_back(currentToken);
                 currentState = State::InNewToken;
                 break;
 		}
-
-        position.column++;
 	}
+
+    // If the input ended right after recognizing a complete token (e.g. last char is ';'),
+    // the loop exits before the InCompleteToken state is flushed into `tokens`.
+    if (currentState == State::InCompleteToken) {
+        position.column += currentToken.text.size();
+        tokens.push_back(currentToken);
+        currentState = State::InNewToken;
+    }
 
     currentToken = { Token::Type::EndToken, lexem, position };
     tokens.push_back(currentToken);
@@ -278,17 +241,16 @@ ParsedProgram Lexer::tokenize(std::string& file, std::string& input) {
 }
 
 const std::unordered_map<std::string, Keyword> Lexer::keywords = {
-	{ "let", Keyword::LET },
     { "int", Keyword::INT },
     { "float", Keyword::FLOAT },
     { "str", Keyword::STR },
+    { "bool", Keyword::BOOL},
     { "if", Keyword::IF },
     { "else", Keyword::ELSE },
     { "for", Keyword::FOR },
     { "as", Keyword::AS },
     { "func", Keyword::FUNCTION },
     { "return", Keyword::RETURN },
-    { "echo", Keyword::ECHO }
 };
 
 } // namespace lexer

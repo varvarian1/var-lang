@@ -8,7 +8,7 @@ function build() {
         rm -rf $SCRIPT_DIR/../build
     fi
 
-    cmake -B $SCRIPT_DIR/../build $SCRIPT_DIR/..
+    cmake -B $SCRIPT_DIR/../build $SCRIPT_DIR/.. -DCMAKE_BUILD_TYPE=Debug
     make -C $SCRIPT_DIR/../build -j$(nproc)
 
     echo "Build completed successfully."

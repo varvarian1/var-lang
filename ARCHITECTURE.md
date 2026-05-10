@@ -13,7 +13,7 @@ The most important directory is `include/core` - it's the heart of the interpret
 - Responsible for tokenizing source code
 - Utilizes a **Finite-state machine** to identify tokens
 - Converts raw source code into a stream of tokens for parsing
-- Recognizes keywords (`func`, `let`, `if`, `else`, `for`, `return`, `echo`, `as`)
+- Recognizes keywords (`func`, `if`, `else`, `for`, `return`, `echo`, `as`)
 - Recognizes operators (`+`, `-`, `*`, `/`, `<`, `>`, `<=`, `>=`, `==`, `!=`)
 - Recognizes literals (numbers, strings, identifiers)
 - Handles whitespace and comments
@@ -38,6 +38,7 @@ The AST represents the structure of the program in a tree format. Each node corr
 
 **Expression Nodes:**
 - `BinaryExpr` - Arithmetic operations (+, -, *, /)
+- `VarDeclExpr` - Variable declaration with type
 - `ComparisonExpr` - Comparison operations (<, >, <=, >=, ==, !=)
 - `LiteralNumber` - Numeric constants
 - `LiteralString` - String constants
@@ -45,14 +46,11 @@ The AST represents the structure of the program in a tree format. Each node corr
 - `FunctionCall` - Function invocation
 
 **Statement Nodes:**
-- `VariableDeclarationStmt` - Variable declaration with type
-- `AssignStmt` - Variable assignment
+- `ReturnStmt` - Return statement
 - `BlockStmt` - Sequence of statements in curly braces
 - `IfStmt` - Conditional execution with optional else branch
 - `ForStmt` - Loop with initialization, condition, and increment
-- `FunctionStmt` - Function definition with parameters and body
-- `ReturnStmt` - Return value from function
-- `EchoStmt` - Output to console
+- `FunctionDecl` - Function definition with parameters and body
 
 ### Interpreter
 

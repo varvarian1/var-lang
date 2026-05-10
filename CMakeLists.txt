@@ -21,7 +21,6 @@ target_include_directories(core PUBLIC
 
 add_library(utils STATIC
     src/utils/cli/arg_parser.cpp
-    src/utils/logger/logger.cpp
 )
 target_include_directories(utils PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include/utils

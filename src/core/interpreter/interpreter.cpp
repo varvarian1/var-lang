@@ -1,5 +1,6 @@
 #include "interpreter/interpreter.hpp"
 #include <iostream>
+#include <memory>
 
 namespace interpreter {
 
@@ -9,9 +10,9 @@ void Interpreter::interpret(const std::vector<ast::Statement>& statements) {
             stmt->accept(*this);
         }
         
-        Function* mainFunc = currentEnv->getFunction("main");
+        std::optional<Function::Ref> mainFunc = currentEnv->getFunction("main");
         if (mainFunc) {
-            callFunction(mainFunc, {});
+            callFunction(*mainFunc, {});
         }
     }
     catch (const std::runtime_error& err) {
@@ -40,105 +41,141 @@ Value Interpreter::popValue() {
     return val;
 }
 
-void Interpreter::applyBinaryOp(ast::Op op) {
+void Interpreter::applyBinaryOperator(ast::BinaryOperator op) {
     Value right = popValue();
     Value left = popValue();
     
-    if (!left.isNumber() || !right.isNumber()) {
-        throw std::runtime_error("Binary operations require numbers");
-    }
-    
-    double result;
-    switch (op) {
-        case ast::Op::Plus:
-            result = left.asNumber() + right.asNumber();
-            break;
-        case ast::Op::Minus:
-            result = left.asNumber() - right.asNumber();
-            break;
-        case ast::Op::Multiply:
-            result = left.asNumber() * right.asNumber();
-            break;
-        case ast::Op::Divide:
-            if (right.asNumber() == 0) {
-                throw std::runtime_error("Division by zero");
-            }
-            result = left.asNumber() / right.asNumber();
-            break;
-        default:
-            throw std::runtime_error("Unknown operator");
-    }
-    
-    evalStack.push_back(Value(result));
-}
+    Value result;
 
-void Interpreter::applyComparisonOp(ast::ComparisonOp op) {
-    Value right = popValue();
-    Value left = popValue();
-    
-    bool result = false;
-    
-    if (left.isNumber() && right.isNumber()) {
+    if (op == ast::BinaryOperator::Assign) {
+        // Preserve declared numeric kind (int vs float) on assignment.
+        // We still store everything as double, but int values are truncated.
+        Value target = currentEnv->getVariable(left.asString());
+        if (target.isNumber() && right.isNumber()) {
+            if (target.numberKind == Value::NumberKind::Int) {
+                right = Value(static_cast<double>(static_cast<long long>(right.asNumber())), Value::NumberKind::Int);
+            } else {
+                right.numberKind = Value::NumberKind::Float;
+            }
+        }
+        currentEnv->setVariable(left.asString(), right);
+        result = right;
+    } else if (left.isNumber() && right.isNumber()) {
         double l = left.asNumber();
         double r = right.asNumber();
+        bool ints = (left.numberKind == Value::NumberKind::Int) && (right.numberKind == Value::NumberKind::Int);
         
         switch (op) {
-            case ast::ComparisonOp::Equal:
+            case ast::BinaryOperator::Add:
+                result = Value(left.asNumber() + right.asNumber(), ints ? Value::NumberKind::Int : Value::NumberKind::Float);
+                break;
+            case ast::BinaryOperator::Subtract:
+                result = Value(left.asNumber() - right.asNumber(), ints ? Value::NumberKind::Int : Value::NumberKind::Float);
+                break;
+            case ast::BinaryOperator::Multiply:
+                result = Value(left.asNumber() * right.asNumber(), ints ? Value::NumberKind::Int : Value::NumberKind::Float);
+                break;
+            case ast::BinaryOperator::Divide:
+                if (right.asNumber() == 0) {
+                    throw std::runtime_error("Division by zero");
+                }
+                if (ints) {
+                    result = Value(static_cast<double>(static_cast<long long>(l) / static_cast<long long>(r)), Value::NumberKind::Int);
+                } else {
+                    result = Value(left.asNumber() / right.asNumber(), Value::NumberKind::Float);
+                }
+                break;
+            case ast::BinaryOperator::Equal:
                 result = l == r;
                 break;
-            case ast::ComparisonOp::NotEqual:
+            case ast::BinaryOperator::NotEqual:
                 result = l != r;
                 break;
-            case ast::ComparisonOp::Less:
+            case ast::BinaryOperator::Less:
                 result = l < r;
                 break;
-            case ast::ComparisonOp::LessEqual:
+            case ast::BinaryOperator::LessEqual:
                 result = l <= r;
                 break;
-            case ast::ComparisonOp::Greater:
+            case ast::BinaryOperator::Greater:
                 result = l > r;
                 break;
-            case ast::ComparisonOp::GreaterEqual:
+            case ast::BinaryOperator::GreaterEqual:
                 result = l >= r;
                 break;
+            default:
+                throw std::runtime_error("Unsupported operator for numbers");
         }
-    }
-    else if (left.isString() && right.isString()) {
+    } else if (left.isString() && right.isString()) {
         std::string l = left.asString();
         std::string r = right.asString();
         
         switch (op) {
-            case ast::ComparisonOp::Equal:
+            case ast::BinaryOperator::Equal:
                 result = l == r;
                 break;
-            case ast::ComparisonOp::NotEqual:
+            case ast::BinaryOperator::NotEqual:
                 result = l != r;
                 break;
             default:
                 throw std::runtime_error("String comparison only supports == and !=");
         }
-    }
-    else {
-        throw std::runtime_error("Cannot compare different types");
+    } else {
+        throw std::runtime_error("Cannot apply operator to different types");
     }
     
     evalStack.push_back(Value(result));
 }
 
-void Interpreter::visit(ast::BinaryExpr& expr) {
-    evaluate(*expr.left);
-    evaluate(*expr.right);
-    applyBinaryOp(expr.op);
+void Interpreter::applyUnaryOperator(ast::UnaryOperator op, ast::Expr& operand) {
+    // for prefix --x / ++x and postfix x++ / x-- we need an lvalue, not a value
+    // for UnaryMinus / UnaryPlus a value is sufficient
+    
+    if (op == ast::UnaryOperator::UnaryMinus) {
+        Value v = popValue();
+        evalStack.push_back(Value(-v.asNumber(), v.numberKind));
+        return;
+    }
+    if (op == ast::UnaryOperator::UnaryPlus) {
+        return;   // unchanged
+    }
+    
+    // ++/-- require operand to be an Identifier (lvalue)
+    auto* ident = dynamic_cast<ast::Identifier*>(&operand);
+    if (!ident) throw std::runtime_error("++/-- requires variable");
+    
+    popValue();   // discard what evaluate put on the stack (the old value)
+    Value old = currentEnv->getVariable(ident->name);
+    Value newVal = Value(old.asNumber() + 
+        (op == ast::UnaryOperator::PreIncrement || op == ast::UnaryOperator::PostIncrement ? 1 : -1), old.numberKind);
+    currentEnv->setVariable(ident->name, newVal);
+    
+    bool is_prefix = (op == ast::UnaryOperator::PreIncrement || op == ast::UnaryOperator::PreDecrement);
+    evalStack.push_back(is_prefix ? newVal : old);   // pre returns new value, post returns old
 }
 
-void Interpreter::visit(ast::ComparisonExpr& expr) {
+void Interpreter::visit(ast::BinaryExpr& expr) {
+    if (expr.op == ast::BinaryOperator::Comma) {
+        evaluate(*expr.left);
+        popValue();
+        evaluate(*expr.right);
+        return;
+    }
+    
     evaluate(*expr.left);
     evaluate(*expr.right);
-    applyComparisonOp(expr.op);
+    applyBinaryOperator(expr.op);
+}
+
+void Interpreter::visit(ast::UnaryExpr& expr) {
+    evaluate(*expr.left);
+    applyUnaryOperator(expr.op, *expr.left);
 }
 
 void Interpreter::visit(ast::LiteralNumber& expr) {
-    evalStack.push_back(Value(expr.value));
+    evalStack.push_back(Value(
+        expr.value,
+        expr.type == ast::LiteralNumber::Type::INT ? Value::NumberKind::Int : Value::NumberKind::Float));
 }
 
 void Interpreter::visit(ast::LiteralString& expr) {
@@ -146,66 +183,55 @@ void Interpreter::visit(ast::LiteralString& expr) {
 }
 
 void Interpreter::visit(ast::Identifier& expr) {
-    try {
-        Value val = currentEnv->getVariable(expr.name);
-        evalStack.push_back(val);
-        return;
-    }
-    catch (const std::runtime_error&) {}
-    
-    Function* func = currentEnv->getFunction(expr.name);
-    if (func) {
-        callFunction(func, {});
-        return;
-    }
-    
-    throw std::runtime_error("Undefined variable or function: " + expr.name);
+    Value val = currentEnv->getVariable(expr.name);
+    evalStack.push_back(val);
 }
 
-void Interpreter::callFunction(Function* func, const std::vector<Value>& args) {
-    Environment* funcEnv = currentEnv->createChild();
-    Environment* previousEnv = currentEnv;
+void Interpreter::callFunction(Function& func, const std::vector<Value>& args) {
+    auto funcEnv = currentEnv->createChild();
+    auto previousEnv = currentEnv;
     currentEnv = funcEnv;
-    
-    for (size_t i = 0; i < func->params.size() && i < args.size(); i++) {
-        funcEnv->defineVariable(func->params[i].second, args[i]);
+
+    if (func.params.size() != args.size()) {
+        currentEnv = previousEnv;
+        throw std::runtime_error("Function '" + func.name + "' expected " +
+            std::to_string(func.params.size()) + " args, got " + 
+            std::to_string(args.size()));
     }
-    
+
+    for (size_t i = 0; i < func.params.size(); ++i) {
+        currentEnv->defineVariable(func.params[i]->name, args[i]);
+    }
+
     hasReturned = false;
-    func->body->accept(*this);
-    
-    delete currentEnv;
+    func.body->accept(*this);
+
     currentEnv = previousEnv;
-    
+
     if (hasReturned) {
         evalStack.push_back(returnValue);
         hasReturned = false;
+    } else {
+        evalStack.push_back(Value());
     }
 }
 
-void Interpreter::visit(ast::VariableDeclarationStmt& stmt) {
+void Interpreter::visit(ast::VarDeclExpr& expr) {
     Value initialValue;
     
-    if (stmt.initializer) {
-        evaluate(*stmt.initializer);
-        initialValue = popValue();
-    }
-    else {
-        if (stmt.type == "int" || stmt.type == "double" || stmt.type == "float" || stmt.type == "number") {
-            initialValue = Value(0.0);
-        }
-        else if (stmt.type == "string") {
-            initialValue = Value(std::string(""));
-        }
-        else if (stmt.type == "bool" || stmt.type == "boolean") {
-            initialValue = Value(false);
-        }
-        else {
-            initialValue = Value();
-        }
+    if (expr.type == "int" || expr.type == "double" || expr.type == "float" || expr.type == "number") {
+        initialValue = Value(0.0, expr.type == "int" ? Value::NumberKind::Int : Value::NumberKind::Float);
+    } else if (expr.type == "string") {
+        initialValue = Value(std::string(""));
+    } else if (expr.type == "bool" || expr.type == "boolean") {
+        initialValue = Value(false);
+    } else {
+        initialValue = Value();
     }
     
-    currentEnv->defineVariable(stmt.name, initialValue);
+    currentEnv->defineVariable(expr.name, initialValue);
+
+    evalStack.push_back(Value(expr.name));
 }
 
 void Interpreter::visit(ast::ExpressionStmt& stmt) {
@@ -213,15 +239,15 @@ void Interpreter::visit(ast::ExpressionStmt& stmt) {
     popValue();
 }
 
-void Interpreter::visit(ast::AssignStmt& stmt) {
+void Interpreter::visit(ast::ReturnStmt& stmt) {
     evaluate(*stmt.value);
-    Value value = popValue();
+    returnValue = popValue();
     
-    currentEnv->setVariable(stmt.name, value);
+    hasReturned = true;
 }
 
 void Interpreter::visit(ast::BlockStmt& stmt) {
-    Environment* previousEnv = currentEnv;
+    std::shared_ptr<Environment> previousEnv = currentEnv;
     currentEnv = currentEnv->createChild();
     
     for (const auto& statement : stmt.statements) {
@@ -231,7 +257,6 @@ void Interpreter::visit(ast::BlockStmt& stmt) {
         }
     }
     
-    delete currentEnv;
     currentEnv = previousEnv;
 }
 
@@ -242,25 +267,22 @@ void Interpreter::visit(ast::IfStmt& stmt) {
     bool condValue = false;
     if (condition.isNumber()) {
         condValue = condition.asNumber() != 0;
-    }
-    else if (condition.isBoolean()) {
+    } else if (condition.isBoolean()) {
         condValue = condition.asBoolean();
-    }
-    else {
+    } else {
         throw std::runtime_error("Condition must be boolean or number");
     }
     
     if (condValue) {
         stmt.thenBranch->accept(*this);
-    }
-    else if (stmt.elseBranch) {
+    } else if (stmt.elseBranch) {
         stmt.elseBranch->accept(*this);
     }
 }
 
 void Interpreter::visit(ast::ForStmt& stmt) {
-    Environment* loopEnv = currentEnv->createChild();
-    Environment* previousEnv = currentEnv;
+    std::shared_ptr<Environment> loopEnv = currentEnv->createChild();
+    std::shared_ptr<Environment> previousEnv = currentEnv;
     currentEnv = loopEnv;
     
     if (stmt.initializer) {
@@ -285,52 +307,72 @@ void Interpreter::visit(ast::ForStmt& stmt) {
         }
     }
     
-    delete loopEnv;
     currentEnv = previousEnv;
 }
 
-void Interpreter::visit(ast::FunctionStmt& stmt) {
+void Interpreter::visit(ast::FunctionDecl& stmt) {
     Function func;
     func.name = stmt.name;
-    func.params = stmt.params;
-    func.body = std::move(const_cast<ast::Statement&>(stmt.body));
+    func.body = stmt.body.get();
     func.returnType = stmt.returnType;
+    
+    if (stmt.params)
+        flatten_params(stmt.params.get(), func.params);
     
     currentEnv->defineFunction(stmt.name, std::move(func));
 }
 
 void Interpreter::visit(ast::FunctionCall& call) {
     std::vector<Value> args;
-    for (auto& arg : call.args) {
-        evaluate(*arg);
-        args.push_back(popValue());
+    if (call.args) flatten_args(call.args.get(), args);
+
+    if (call.name == "echo") {
+        for (auto& v : args) std::cout << v.toString();
+        std::cout << std::endl;
+        evalStack.push_back(Value());
+        return;
     }
-    
-    Function* func = currentEnv->getFunction(call.name);
-    if (!func) {
+
+    auto func = currentEnv->getFunction(call.name);
+    if (!func)
         throw std::runtime_error("Undefined function: " + call.name);
+
+    callFunction(*func, args);
+}
+
+void Interpreter::flatten_args(ast::Expr* node, std::vector<Value>& out) {
+    if (!node) return;   // empty args (())
+    
+    if (auto* bin = dynamic_cast<ast::BinaryExpr*>(node);
+        bin && bin->op == ast::BinaryOperator::Comma)
+    {
+        flatten_args(bin->left.get(), out);
+        flatten_args(bin->right.get(), out);
+        return;
     }
     
-    callFunction(func, args);
+    // not a Comma at the top level — evaluate as expression
+    evaluate(*node);
+    out.push_back(popValue());
 }
 
-void Interpreter::visit(ast::ReturnStmt& stmt) {
-    if (stmt.value) {
-        evaluate(*stmt.value);
-        returnValue = popValue();
+void Interpreter::flatten_params(ast::Expr* node, std::vector<ast::VarDeclExpr*>& out) {
+    if (!node) return;
+    
+    if (auto* bin = dynamic_cast<ast::BinaryExpr*>(node);
+        bin && bin->op == ast::BinaryOperator::Comma)
+    {
+        flatten_params(bin->left.get(), out);
+        flatten_params(bin->right.get(), out);
+        return;
     }
-    else {
-        returnValue = Value();
+    
+    if (auto* decl = dynamic_cast<ast::VarDeclExpr*>(node)) {
+        out.push_back(decl);
+        return;
     }
-
-    hasReturned = true;
-}
-
-void Interpreter::visit(ast::EchoStmt& stmt) {
-    evaluate(*stmt.expr);
-    Value value = popValue();
-
-    std::cout << value.toString() << std::endl;
+    
+    throw std::runtime_error("Invalid parameter declaration");
 }
 
 } // namespace interpreter

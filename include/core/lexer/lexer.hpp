@@ -6,11 +6,12 @@
 #include "token.hpp"
 
 namespace lexer {
+using namespace token;
 class Lexer {
 public:
 	
 	/* Tokenize the input string. */
-	ParsedProgram tokenize(std::string& file, std::string& input);
+	ParsedProgram tokenize(std::string& input, std::string file = "");
 
 	// Check if character is a digit (0-9)
 	inline bool isDigit(char ch) {

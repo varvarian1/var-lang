@@ -9,6 +9,7 @@
 
 namespace parser {
 
+using namespace token;
 struct ErrorMeta {
     std::string message;
     Token token;
@@ -24,49 +25,46 @@ Result<std::unique_ptr<T>, ErrorMeta> make_ok(Args&&... args) {
 
 class Parser {
 public:
-    Parser(ParsedProgram& program) : program(program), tokensVector(program.tokens), tokenIndex(0) {
+    Parser(ParsedProgram& program) 
+        : program(program), tokensVector(program.tokens), 
+          keywordMeta(program.keyword), tokenIndex(0)
+    {
         if (!tokensVector.empty()) {
             currentToken = tokensVector[tokenIndex];
         }
     }
 
+    bool is_terminator(Token::Type t);
+
     std::vector<ast::Statement> parse();
 
     /* declarations */
     ParseResult<ast::Statement> declaration();
-    ParseResult<ast::Statement> letDeclaration();
     ParseResult<ast::Statement> functionDeclaration();
-    ParseResult<ast::Statement> variableDeclaration();
     ParseResult<ast::Statement> block();
     ParseResult<std::string> parseType();
 
     /* expression parsing methods */
-    ParseResult<ast::Expression> expression();
-    ParseResult<ast::Expression> term();
-    ParseResult<ast::Expression> factor();
-    ParseResult<ast::Expression> comparison();
-
-    /* token type checking helpers */
-    bool isPlus(const Token& token) const;
-    bool isMinus(const Token& token) const;
-    bool isComparison(const Token& token) const;
+    ParseResult<ast::Expression> expression(int min_prec = 1);
+    ParseResult<ast::Expression> assignment();
+    ParseResult<ast::Expression> postfix();
+    ParseResult<ast::Expression> unary();
 
     /* helper methods for factor parsing */
+    ParseResult<ast::Expression> variableDeclaration();
     ParseResult<ast::Expression> parseNumber();
     ParseResult<ast::Expression> parseString();
     ParseResult<ast::Expression> parseParenthesizedExpr();
-    ParseResult<ast::Expression> parseFunctionCall(const std::string& name);
 
     /* statment parsing methods */
     ParseResult<ast::Statement> statement();
-    ParseResult<ast::Statement> functionCallStmt();
+    ParseResult<ast::Statement> exprStmt();
     ParseResult<ast::Statement> ifStmt();
     ParseResult<ast::Statement> forStmt();
     ParseResult<ast::Statement> returnStmt();
-    ParseResult<ast::Statement> echoStmt();
-    ParseResult<ast::Statement> assignStmt();
 
     bool check(Token::Type type) const;
+    bool checkNext(Token::Type type) const;
     std::optional<Token> skipUntil(Token::Type type);
     std::optional<Token> nextToken();
     std::optional<Token> peekNext() const;
@@ -84,12 +82,10 @@ public:
             nextToken();
 
             return consumed;
-        }
-        else if constexpr (std::is_same_v<T, Keyword>) {            
+        } else if constexpr (std::is_same_v<T, Keyword>) {            
             eat(Token::Type::Keyword);
             
-            auto& [_, k_meta] = program;
-            Keyword* keyword = k_meta.get(tokenIndex - 1);
+            std::optional<Keyword> keyword = keywordMeta.get(tokenIndex - 1);
             
             if (!keyword || *keyword != type) {
                 return ErrorMeta{"Expected keyword: " + keyword_to_string(type)
@@ -107,35 +103,37 @@ public:
 
     template<typename T>
     bool match(const std::initializer_list<T>& types) {
-        T currentType;
-
-        if constexpr (std::is_same_v<T, Token::Type>) {
-            currentType = currentToken.type;
-        }
-        else if constexpr (std::is_same_v<T, Keyword>) {
-            auto& [ _, k_meta ] = program;
-            Keyword* keyword = k_meta.get(tokenIndex);
-
-            if (!keyword)
-                return false;
-
-            currentType = *keyword;
-        }
+        size_t index = tokenIndex;
 
         for (const auto& type : types) {
-            if (currentType == type) {
-                nextToken();
-                return true;
+            if constexpr (std::is_same_v<T, Token::Type>) {
+                if (tokensVector[index].type != type)
+                    return false;
+            } else if constexpr (std::is_same_v<T, Keyword>) {
+                std::optional<Keyword> keyword = keywordMeta.get(index);
+
+                if (!keyword || *keyword != type)
+                    return false;
             }
+
+            index++;
+
+            if (index >= tokensVector.size())
+                return false;
         }
 
-        return false;
+        tokenIndex = index;
+        currentToken = tokensVector[tokenIndex];
+
+        return true;
     }
 
 private:
     // Referance to the token vector (externally owned)
     ParsedProgram& program;
     std::vector<Token>& tokensVector;
+
+    MetaChannel<Keyword>& keywordMeta;
 
     // Current parsing position
     size_t tokenIndex = 0;

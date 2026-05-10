@@ -1,4 +1,9 @@
 #include "interpreter/visitor.hpp"
+#include "ast/ast.hpp"
+
+#include <cmath>
+#include <iomanip>
+#include <sstream>
 
 namespace interpreter {
 bool Value::isNumber() const { 
@@ -41,7 +46,14 @@ bool Value::asBoolean() const {
 std::string Value::toString() const {
     switch (type) {
         case Type::Number:
-            return std::to_string(std::get<double>(data));
+            if (numberKind == NumberKind::Int) {
+                return std::to_string(static_cast<long long>(std::get<double>(data)));
+            } else {
+                std::ostringstream oss;
+                oss.setf(std::ios::fmtflags(0), std::ios::floatfield);
+                oss << std::setprecision(15) << std::get<double>(data);
+                return oss.str();
+            }
 
         case Type::String:
             return std::get<std::string>(data);
@@ -70,7 +82,7 @@ Value Environment::getVariable(const std::string& name) {
         return it->second;
     }
     if (parent) {
-        return parent->getVariable(name);
+        return parent->get().getVariable(name);
     }
 
     throw std::runtime_error("Undefined variable: " + name);
@@ -83,27 +95,30 @@ void Environment::setVariable(const std::string& name, const Value& value) {
         return;
     }
     if (parent) {
-        parent->setVariable(name, value);
+        parent->get().setVariable(name, value);
         return;
     }
 
     throw std::runtime_error("Undefined variable: " + name);
 }
 
-Function* Environment::getFunction(const std::string& name) {
+std::optional<Function::Ref> Environment::getFunction(const std::string& name) {
     auto it = functions.find(name);
     if (it != functions.end()) {
-        return &it->second;
+        return it->second;
     }
     if (parent) {
-        return parent->getFunction(name);
+        std::optional<Function::Ref> func = parent->get().getFunction(name);
+        if (func) {
+            return func;
+        }
     }
     
-    return nullptr;
+    return std::nullopt;
 }
 
-Environment* Environment::createChild() {
-    return new Environment(this);
+std::shared_ptr<Environment> Environment::createChild() {
+    return std::make_shared<Environment>(*this);
 }
 
 } // namespace interpreter
@@ -113,7 +128,11 @@ void BinaryExpr::accept(interpreter::Visitor& visitor) {
     visitor.visit(*this); 
 }
 
-void ComparisonExpr::accept(interpreter::Visitor& visitor) { 
+void UnaryExpr::accept(interpreter::Visitor& visitor) { 
+    visitor.visit(*this); 
+}
+
+void VarDeclExpr::accept(interpreter::Visitor& visitor) { 
     visitor.visit(*this); 
 }
 
@@ -129,15 +148,11 @@ void Identifier::accept(interpreter::Visitor& visitor) {
     visitor.visit(*this); 
 }
 
-void VariableDeclarationStmt::accept(interpreter::Visitor& visitor) { 
-    visitor.visit(*this); 
-}
-
-void ast::ExpressionStmt::accept(interpreter::Visitor& visitor) {
+void ExpressionStmt::accept(interpreter::Visitor& visitor) {
     visitor.visit(*this);
 }
 
-void AssignStmt::accept(interpreter::Visitor& visitor) { 
+void ReturnStmt::accept(interpreter::Visitor& visitor) { 
     visitor.visit(*this); 
 }
 
@@ -153,20 +168,12 @@ void ForStmt::accept(interpreter::Visitor& visitor) {
     visitor.visit(*this); 
 }
 
-void FunctionStmt::accept(interpreter::Visitor& visitor) { 
+void FunctionDecl::accept(interpreter::Visitor& visitor) { 
     visitor.visit(*this); 
 }
 
 void ast::FunctionCall::accept(interpreter::Visitor& visitor) {
     visitor.visit(*this);
-}
-
-void ReturnStmt::accept(interpreter::Visitor& visitor) { 
-    visitor.visit(*this); 
-}
-
-void EchoStmt::accept(interpreter::Visitor& visitor) { 
-    visitor.visit(*this); 
 }
 
 } // namespace ast
